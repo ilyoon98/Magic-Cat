@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/imtl/Downloads/**)",
+      "Bash(python -c ':*)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"from pypdf import PdfReader; print\\('ok'\\)\")",
+      "Bash(python -c \"import PyPDF2; print\\('PyPDF2 ok'\\)\")",
+      "Bash(python -c \"import fitz; print\\('fitz ok'\\)\")",
+      "Bash(python -c \"import pdfminer; print\\('pdfminer ok'\\)\")",
+      "Bash(python -c \"import PyPDF2; print\\('ok'\\)\")",
+      "Bash(dir \"C:\\\\Users\\\\imtl\\\\Magic Cats\\\\Assets\\\\Resources\\\\Portraits\" /b)",
+      "mcp__filesystem__directory_tree"
+    ]
+  }
+}
