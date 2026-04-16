@@ -56,6 +56,8 @@ public class SceneBootstrapper : MonoBehaviour
         new GameObject("EffectManager").AddComponent<EffectManager>();
         new GameObject("StageManager").AddComponent<StageManager>();
         new GameObject("CheatManager").AddComponent<CheatManager>();
+        new GameObject("AudioManager").AddComponent<AudioManager>();
+        new GameObject("BoardBackground").AddComponent<BoardBackground>();
     }
 
     // ── 2. 보드 ───────────────────────────────────────────────────────────
@@ -114,22 +116,46 @@ public class SceneBootstrapper : MonoBehaviour
         // 치트 패널
         canvasGo.AddComponent<CheatPanel>().Build(canvas);
 
-        // 결과 화면 (게임오버 / 맵클리어)
+        // 결과 화면 (일반 맵 클리어)
         canvasGo.AddComponent<ResultScreen>().Build(canvas.transform);
 
         // 스테이지 선택 화면
         canvasGo.AddComponent<StageSelectScreen>().Build(canvas.transform);
 
-        // 타이틀 화면 (맨 위에 그려지도록 마지막에 추가)
+        // 갤러리 화면
+        canvasGo.AddComponent<GalleryScreen>().Build(canvas.transform);
+
+        // 설정 패널
+        canvasGo.AddComponent<SettingsPanel>().Build(canvas.transform);
+
+        // 타이틀 화면
         canvasGo.AddComponent<TitleScreen>().Build(canvas);
+
+        // 특별씬 컨트롤러 (페이드 + 게임오버/클리어 이미지 + 풍경 패닝)
+        // → 반드시 TitleScreen 다음에 빌드해야 캔버스 최상단에 렌더링됨
+        canvasGo.AddComponent<SpecialSceneController>().Build(canvas.transform);
     }
 
     // ── 4. 유닛 배치 ──────────────────────────────────────────────────────
     private void SetupTestEntities()
     {
-        // 플레이어
-        var playerGo = CreateCircleObject("Player", new Color(0.35f, 0.65f, 1f));
-        playerGo.transform.localScale = Vector3.one * 0.72f;
+        // 플레이어 (Stage 1 이미지 우선, 없으면 원형 폴백)
+        var playerGo = new GameObject("Player");
+        var sr = playerGo.AddComponent<SpriteRenderer>();
+        Sprite initSp = UnitSpriteCache.LoadSprite("Units/Player_Stage1");
+        if (initSp != null)
+        {
+            sr.sprite = initSp;
+            sr.color  = Color.white;
+            playerGo.transform.localScale = Vector3.one * 0.95f;
+        }
+        else
+        {
+            sr.sprite = UnitSpriteCache.CircleSprite;
+            sr.color  = new Color(0.35f, 0.65f, 1f);
+            playerGo.transform.localScale = Vector3.one * 0.72f;
+        }
+        sr.sortingOrder = 5;
         var player = playerGo.AddComponent<ElementalPlayerUnit>();
         player.maxHp        = 3;
         player.attackDamage = 1;

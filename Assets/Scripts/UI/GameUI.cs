@@ -3,23 +3,27 @@ using UnityEngine.UI;
 
 /// <summary>
 /// 게임 HUD (Screen Space)
-/// - 상단: 턴 상태
+/// - 상단: 턴 상태 (좌측 포트레이트 패널 오른쪽부터)
 /// - 하단 중앙: 행동 현황 + 턴 종료 버튼
+/// - 우상단: 메뉴 버튼
 /// - 중앙: 이벤트 알림 (적 공격 등)
 /// </summary>
 public class GameUI : MonoBehaviour
 {
     public static GameUI Instance { get; private set; }
 
-    private Text turnText;
-    private Text actionAttackText;
-    private Text actionMoveText;
-    private Text actionSkillText;
+    private Text   turnText;
+    private Text   actionAttackText;
+    private Text   actionMoveText;
+    private Text   actionSkillText;
     private Button endTurnButton;
-    private Text notifyText;
-    private float notifyTimer;
+    private Text   notifyText;
+    private float  notifyTimer;
 
-    // (구) 맵 클리어 패널 → ResultScreen으로 대체됨
+    // 인게임 메뉴 패널
+    private GameObject inGameMenuPanel;
+    public static bool IsMenuOpen => Instance != null && Instance.inGameMenuPanel != null
+                                  && Instance.inGameMenuPanel.activeSelf;
 
     private void Awake()
     {
@@ -38,21 +42,22 @@ public class GameUI : MonoBehaviour
 
     public void Build(Canvas canvas)
     {
-        // ━━━ 좌측: 캐릭터 정보 패널 (같은 캔버스에 붙임) ━━━━━━━━━━━━━━━━━━━
+        // ━━━ 좌측: 캐릭터 정보 패널 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         var portraitPanelGo = new GameObject("PortraitPanel");
         portraitPanelGo.transform.SetParent(canvas.transform, false);
         var portraitPanel = portraitPanelGo.AddComponent<PortraitPanel>();
         portraitPanel.Build(canvas.transform);
 
-        // ━━━ 상단: 턴 표시 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ━━━ 상단: 턴 표시 (포트레이트 패널 너비 175px 이후부터) ━━━━━━━━━━
+        // anchorMin.x = 175/1920 ≈ 0.091 로 좌측 패널과 겹치지 않게
         var topPanel = MakePanel(canvas.transform, "TopPanel",
-            new Vector2(0f, 1f), new Vector2(1f, 1f),
-            new Vector2(0f, -38f), new Vector2(0f, 70f),
-            new Color(0f, 0f, 0f, 0.6f));
+            new Vector2(0.091f, 1f), new Vector2(1f, 1f),
+            new Vector2(0f, -35f), new Vector2(0f, 64f),
+            new Color(0f, 0f, 0f, 0.60f));
 
         turnText = MakeText(topPanel.transform, "TurnText",
             Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
-            "플레이어 턴", 32, Color.white, TextAnchor.MiddleCenter);
+            "플레이어 턴", 30, Color.white, TextAnchor.MiddleCenter);
 
         // ━━━ 하단: 행동 현황 패널 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         var actionPanel = MakePanel(canvas.transform, "ActionPanel",
@@ -84,13 +89,112 @@ public class GameUI : MonoBehaviour
         endTurnButton.GetComponentInChildren<Text>().fontSize = 19;
         endTurnButton.onClick.AddListener(() => TurnManager.Instance?.SkipTurn());
 
+        // ━━━ 우상단: 메뉴 버튼 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        var menuBtn = MakeButton(canvas.transform, "MenuBtn",
+            new Vector2(1f, 1f), new Vector2(1f, 1f),
+            new Vector2(-52f, -34f), new Vector2(88f, 44f),
+            new Color(0.22f, 0.22f, 0.28f));
+        menuBtn.GetComponentInChildren<Text>().text = "≡ 메뉴";
+        menuBtn.GetComponentInChildren<Text>().fontSize = 18;
+        menuBtn.onClick.AddListener(OpenMenu);
+
         // ━━━ 중앙: 이벤트 알림 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         notifyText = MakeText(canvas.transform, "NotifyText",
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
             new Vector2(0f, -100f), new Vector2(450f, 50f),
             "", 28, new Color(1f, 0.35f, 0.35f), TextAnchor.MiddleCenter);
 
-        // 맵 클리어 패널은 ResultScreen.cs 로 이전됨
+        // ━━━ 인게임 메뉴 패널 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        BuildInGameMenu(canvas.transform);
+    }
+
+    // ── 인게임 메뉴 빌드 ─────────────────────────────────────────────────
+    private void BuildInGameMenu(Transform canvasRoot)
+    {
+        // 전체화면 반투명 오버레이
+        inGameMenuPanel = new GameObject("InGameMenu");
+        inGameMenuPanel.transform.SetParent(canvasRoot, false);
+        var rt = inGameMenuPanel.AddComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.sizeDelta = Vector2.zero;
+        inGameMenuPanel.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.75f);
+
+        // 메뉴 카드
+        var card = new GameObject("MenuCard");
+        card.transform.SetParent(inGameMenuPanel.transform, false);
+        var crt = card.AddComponent<RectTransform>();
+        crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
+        crt.sizeDelta = new Vector2(340f, 320f);
+        crt.anchoredPosition = Vector2.zero;
+        card.AddComponent<Image>().color = new Color(0.07f, 0.08f, 0.14f, 1f);
+
+        // 제목
+        MakeText(card.transform, "MenuTitle",
+            new Vector2(0f, 0.78f), new Vector2(1f, 1f),
+            Vector2.zero, Vector2.zero,
+            "⏸  일시정지", 30, new Color(0.75f, 0.88f, 1f), TextAnchor.MiddleCenter);
+
+        // 구분선
+        var div = new GameObject("Div"); div.transform.SetParent(card.transform, false);
+        var drt = div.AddComponent<RectTransform>();
+        drt.anchorMin = new Vector2(0.05f, 0.755f); drt.anchorMax = new Vector2(0.95f, 0.76f);
+        drt.sizeDelta = Vector2.zero;
+        div.AddComponent<Image>().color = new Color(0.3f, 0.4f, 0.6f, 0.5f);
+
+        // ── 계속하기 버튼
+        var resumeBtn = MakeButton(card.transform, "ResumeBtn",
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0f, 68f), new Vector2(268f, 56f),
+            new Color(0.15f, 0.55f, 0.95f));
+        resumeBtn.GetComponentInChildren<Text>().text = "▶  계속하기";
+        resumeBtn.GetComponentInChildren<Text>().fontSize = 22;
+        resumeBtn.onClick.AddListener(CloseMenu);
+
+        // ── 타이틀로 버튼
+        var titleBtn = MakeButton(card.transform, "TitleBtn",
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0f, 0f), new Vector2(268f, 56f),
+            new Color(0.28f, 0.28f, 0.35f));
+        titleBtn.GetComponentInChildren<Text>().text = "🏠  타이틀로";
+        titleBtn.GetComponentInChildren<Text>().fontSize = 22;
+        titleBtn.onClick.AddListener(GoTitle);
+
+        // ── 스테이지 선택 버튼
+        var selectBtn = MakeButton(card.transform, "SelectBtn",
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0f, -68f), new Vector2(268f, 56f),
+            new Color(0.22f, 0.28f, 0.40f));
+        selectBtn.GetComponentInChildren<Text>().text = "🗂  스테이지 선택";
+        selectBtn.GetComponentInChildren<Text>().fontSize = 22;
+        selectBtn.onClick.AddListener(GoStageSelect);
+
+        inGameMenuPanel.SetActive(false);
+    }
+
+    // ── 메뉴 열기/닫기 ───────────────────────────────────────────────────
+    public void OpenMenu()
+    {
+        GameManager.Instance?.Pause();
+        inGameMenuPanel.SetActive(true);
+    }
+
+    public void CloseMenu()
+    {
+        inGameMenuPanel.SetActive(false);
+        GameManager.Instance?.Resume();
+    }
+
+    private void GoTitle()
+    {
+        inGameMenuPanel.SetActive(false);
+        GameManager.Instance?.Resume(); // 상태 복원 후 타이틀로
+        TitleScreen.Instance?.Show();
+    }
+
+    private void GoStageSelect()
+    {
+        inGameMenuPanel.SetActive(false);
+        GameManager.Instance?.Resume();
+        StageSelectScreen.Instance?.Show();
     }
 
     // ResultScreen으로 이전 — 하위 호환용 스텁
@@ -101,7 +205,8 @@ public class GameUI : MonoBehaviour
     {
         if (TurnManager.Instance == null) return;
 
-        bool isPlayerTurn = TurnManager.Instance.CurrentPhase == TurnManager.TurnPhase.PlayerTurn;
+        bool isPlayerTurn = TurnManager.Instance.CurrentPhase == TurnManager.TurnPhase.PlayerTurn
+                         && GameManager.Instance?.CurrentState == GameManager.GameState.PlayerTurn;
         var player = TurnManager.Instance.GetPlayer();
 
         turnText.text = isPlayerTurn
@@ -109,7 +214,6 @@ public class GameUI : MonoBehaviour
             : "[ 적 턴 ... ]";
         turnText.color = isPlayerTurn ? Color.white : new Color(1f, 0.45f, 0.45f);
 
-        // 1행동 시스템 — 행동 완료 여부로 표시
         if (player != null)
         {
             bool acted = player.HasActedThisTurn;
@@ -118,13 +222,11 @@ public class GameUI : MonoBehaviour
             SetActionText(actionSkillText,  "✦ 스킬",  acted);
         }
 
-        bool ipt = isPlayerTurn;
-        endTurnButton.interactable = ipt;
-        endTurnButton.GetComponent<Image>().color = ipt
+        endTurnButton.interactable = isPlayerTurn;
+        endTurnButton.GetComponent<Image>().color = isPlayerTurn
             ? new Color(0.2f, 0.5f, 0.95f)
             : new Color(0.18f, 0.18f, 0.22f);
 
-        // PortraitPanel도 함께 갱신 (모든 플레이어 타입 지원)
         if (player != null)
             PortraitPanel.Instance?.Refresh(player);
     }
@@ -143,7 +245,6 @@ public class GameUI : MonoBehaviour
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────────────
-
     private Image MakePanel(Transform parent, string name,
         Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPos, Vector2 sizeDelta, Color color)
     {

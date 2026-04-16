@@ -13,6 +13,8 @@ public class Skill_Teleport : SkillBase
 
     public int Charges => charges;
 
+    public override SkillPreviewType PreviewType => SkillPreviewType.Teleport;
+
     private void Awake()
     {
         skillName   = "순간이동";

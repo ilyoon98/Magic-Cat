@@ -88,17 +88,24 @@ public class SpecialSceneController : MonoBehaviour
     // 공개 진입점
     // ═══════════════════════════════════════════════════════════════════════
 
-    public void ShowGameOver(int stage)         => StartCoroutine(GameOverSeq(stage));
+    /// <param name="killerName">공격한 적 이름 (공백 제거, 예: "Slime", "BigSlime")</param>
+    public void ShowGameOver(int stage, string killerName = "") => StartCoroutine(GameOverSeq(stage, killerName));
     public void ShowStageClear(int stage)       => StartCoroutine(StageClearSeq(stage));
     public void ShowAllClear()                  => StartCoroutine(AllClearSeq());
+    /// <summary>스테이지 선택 후 인트로 연출 (풍경 패닝 → 게임 시작)</summary>
+    public void ShowStageIntro(int stage)       => StartCoroutine(StageIntroSeq(stage));
 
     // ── 게임오버 ──────────────────────────────────────────────────────────
-    private IEnumerator GameOverSeq(int stage)
+    private IEnumerator GameOverSeq(int stage, string killerName)
     {
         yield return StartCoroutine(FadeToBlack(0.55f));
 
-        SetupScene(LoadScene("GameOver") ?? LoadScene($"GameOver_{stage}"),
-                   new Color(0.12f, 0.02f, 0.02f));
+        // 우선순위: Stage+Killer → Stage → 공통  (Defeat/ 폴더)
+        Sprite sp = LoadImage("Defeat", $"GameOver_Stage{stage}_{killerName}")
+                 ?? LoadImage("Defeat", $"GameOver_Stage{stage}")
+                 ?? LoadImage("Defeat", "GameOver");
+
+        SetupScene(sp, new Color(0.12f, 0.02f, 0.02f));
 
         SetBtn(btn1, "메뉴로 돌아가기", new Color(0.75f, 0.18f, 0.18f), GoTitle);
         btn2.gameObject.SetActive(false);
@@ -112,7 +119,7 @@ public class SpecialSceneController : MonoBehaviour
     {
         yield return StartCoroutine(FadeToBlack(0.55f));
 
-        SetupScene(LoadScene($"StageClear_{stage}"), new Color(0.08f, 0.06f, 0.01f));
+        SetupScene(LoadImage("Stage", $"StageClear_{stage}"), new Color(0.08f, 0.06f, 0.01f));
 
         SetBtn(btn1, "다음 맵 →", new Color(0.78f, 0.58f, 0.10f),
                () => StartCoroutine(LandscapeSeq(stage)));
@@ -128,7 +135,7 @@ public class SpecialSceneController : MonoBehaviour
     {
         yield return StartCoroutine(FadeToBlack(0.55f));
 
-        SetupScene(LoadScene("AllClear"), new Color(0.05f, 0.02f, 0.12f));
+        SetupScene(LoadImage("Stage", "AllClear"), new Color(0.05f, 0.02f, 0.12f));
 
         SetBtn(btn1, "처음부터",  new Color(0.50f, 0.12f, 0.88f), GoRestart);
         SetBtn(btn2, "타이틀로",  new Color(0.28f, 0.28f, 0.33f), GoTitle);
@@ -136,6 +143,59 @@ public class SpecialSceneController : MonoBehaviour
 
         sceneRoot.SetActive(true);
         yield return StartCoroutine(FadeIn(0.5f));
+    }
+
+    // ── 스테이지 인트로 (스테이지 선택 → 게임 시작) ──────────────────────
+    private IEnumerator StageIntroSeq(int stage)
+    {
+        // 보드가 보이지 않도록 즉시 검정 처리 (페이드 없이 바로)
+        fadeOverlay.raycastTarget = true;
+        fadeOverlay.color = new Color(0, 0, 0, 1f);
+        yield return null; // 한 프레임 대기 (렌더링 반영)
+
+        // Landscape_{stage} 이미지로 패닝 (없으면 단색 배경으로 폴백)
+        Sprite landSp = LoadImage("Stage", $"Landscape_{stage}");
+        if (landSp != null)
+        {
+            landscapeImg.sprite = landSp;
+            landscapeImg.color  = Color.white;
+            float ratio = (float)landSp.texture.width / landSp.texture.height;
+            landscapeRt.sizeDelta = new Vector2(1080f * ratio, 1080f);
+        }
+        else
+        {
+            landscapeImg.sprite = null;
+            landscapeImg.color  = new Color(0.10f, 0.15f, 0.28f);
+            landscapeRt.sizeDelta = new Vector2(1920f, 1080f);
+        }
+        landscapeRt.anchoredPosition = Vector2.zero;
+
+        landscapeRoot.SetActive(true);
+        yield return StartCoroutine(FadeIn(0.45f));
+
+        // 좌→우 패닝
+        float imageW  = landscapeRt.sizeDelta.x;
+        float screenW = 1920f;
+        float maxPan  = Mathf.Max(0f, imageW - screenW);
+        float duration = landSp != null ? Mathf.Clamp(maxPan / 380f, 2.5f, 5f) : 1.5f;
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.SmoothStep(0f, 1f, elapsed / duration);
+            landscapeRt.anchoredPosition = new Vector2(-maxPan * t, 0f);
+            yield return null;
+        }
+
+        // 페이드 아웃 → 게임 초기화 → 페이드 인
+        yield return StartCoroutine(FadeToBlack(0.45f));
+        landscapeRoot.SetActive(false);
+
+        GameManager.Instance?.StartGame(stage);
+
+        yield return new WaitForSeconds(0.1f);
+        yield return StartCoroutine(FadeIn(0.45f));
     }
 
     // ── 풍경 패닝 씬 (좌→우) ─────────────────────────────────────────────
@@ -148,7 +208,7 @@ public class SpecialSceneController : MonoBehaviour
         sceneRoot.SetActive(false);
 
         // 풍경 이미지 설정
-        Sprite landSp = LoadScene($"Landscape_{stage}");
+        Sprite landSp = LoadImage("Stage", $"Landscape_{stage}");
         if (landSp != null)
         {
             landscapeImg.sprite = landSp;
@@ -228,11 +288,13 @@ public class SpecialSceneController : MonoBehaviour
         UnityEngine.SceneManagement.SceneManager.LoadScene(0);
 
     // ── Resources 로드 (Sprite → Texture2D 폴백) ──────────────────────────
-    private Sprite LoadScene(string name)
+    /// <param name="folder">예: "Defeat", "Stage", "Scenes"</param>
+    private Sprite LoadImage(string folder, string name)
     {
-        Sprite sp = Resources.Load<Sprite>($"Scenes/{name}");
+        string path = $"{folder}/{name}";
+        Sprite sp = Resources.Load<Sprite>(path);
         if (sp != null) return sp;
-        Texture2D tex = Resources.Load<Texture2D>($"Scenes/{name}");
+        Texture2D tex = Resources.Load<Texture2D>(path);
         if (tex == null) return null;
         return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
     }

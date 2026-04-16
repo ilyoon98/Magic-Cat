@@ -2,28 +2,47 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 갤러리 화면 — 해금된 캐릭터 일러스트 열람
+/// 갤러리 화면 — 스테이지 선택 → 해당 스테이지 이미지 목록
 ///
-/// 구성: 3스테이지 × 4 HP = 12장
-/// HP3(풀피) → 항상 해금
-/// HP2,1,0   → 게임 중 해당 체력에 도달 시 해금
+/// 스테이지별 8칸 구성:
+///   Row 1 캐릭터 초상화: HP3 HP2 HP1 HP0
+///   Row 2 스테이지·패배: 배경 클리어 Slime패배 BigSlime패배
 ///
-/// 해금된 이미지는 클릭하면 전체화면으로 감상 가능
+/// 해금 조건:
+///   HP3 초상화  — 항상 해금
+///   HP2/1/0     — 해당 체력에 도달 시
+///   배경        — 해당 스테이지 첫 진입 시
+///   클리어      — 보스 클리어 시
+///   Slime 패배  — Slime에게 패배 시
+///   BigSlime 패배 — BigSlime에게 패배 시
 /// </summary>
 public class GalleryScreen : MonoBehaviour
 {
     public static GalleryScreen Instance { get; private set; }
 
-    private GameObject panel;
+    // ── 데이터 정의 ──────────────────────────────────────────────────────
+    private static readonly string[] StageNames  = { "원소마법사", "흑백마법사", "비전마법사" };
+    private static readonly string[] KillerKeys  = { "Slime", "BigSlime" };
+    private static readonly string[] KillerNames = { "슬라임 패배", "빅슬라임 패배" };
+
+    // 행 1: 초상화 HP3·2·1·0 / 행 2: 배경·클리어·적패배×2
+    private const int COLS = 4;
+    private const int ROWS = 2;
+
+    // ── UI 참조 ───────────────────────────────────────────────────────────
+    private GameObject stageSelectPanel;   // 스테이지 선택 화면
+    private GameObject detailPanel;        // 스테이지별 상세 화면
+
+    // 상세: 셀 이미지·잠금 (row, col)
+    private Image[,]      cellImgs  = new Image[ROWS, COLS];
+    private GameObject[,] lockIcons = new GameObject[ROWS, COLS];
+    private Text          detailTitle;
+
+    private int currentStage = 0; // 현재 보고 있는 스테이지 (1~3)
+
+    // 전체화면 감상
     private GameObject fullViewPanel;
     private Image      fullViewImage;
-
-    // 각 셀의 Image 참조 (갱신용)
-    private Image[,]   cellImages  = new Image[3, 4];  // [stage-1, hp]
-    private GameObject[,] lockIcons = new GameObject[3, 4];
-
-    // 스테이지별 캐릭터 이름
-    private static readonly string[] StageNames = { "원소마법사", "흑백마법사", "비전마법사" };
 
     private void Awake()
     {
@@ -31,202 +50,321 @@ public class GalleryScreen : MonoBehaviour
         Instance = this;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // Build
+    // ═══════════════════════════════════════════════════════════════════════
     public void Build(Transform canvasRoot)
     {
-        // ── 배경 패널 ─────────────────────────────────────────────────────
-        panel = new GameObject("GalleryScreen");
-        panel.transform.SetParent(canvasRoot, false);
-        var rt = panel.AddComponent<RectTransform>();
-        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.sizeDelta = Vector2.zero;
-        panel.AddComponent<Image>().color = new Color(0.04f, 0.04f, 0.08f, 1f);
+        BuildStageSelectPanel(canvasRoot);
+        BuildDetailPanel(canvasRoot);
+        BuildFullViewPanel(canvasRoot);
 
-        // ── 제목 ──────────────────────────────────────────────────────────
-        MakeText(panel.transform, "GalleryTitle",
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0, -70), new Vector2(600, 70),
-            "갤 러 리", 48, new Color(0.85f, 0.88f, 1f), TextAnchor.MiddleCenter);
-
-        MakeText(panel.transform, "GallerySub",
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0, -130), new Vector2(700, 38),
-            "체력이 낮아질수록 이미지가 해금됩니다", 20,
-            new Color(0.55f, 0.65f, 0.75f), TextAnchor.MiddleCenter);
-
-        // ── 이미지 그리드 (3스테이지 × 4HP) ─────────────────────────────
-        // HP 순서: 3(풀) → 2 → 1 → 0(사망 직전)
-        int[] hpOrder = { 3, 2, 1, 0 };
-        string[] hpLabels = { "❤❤❤", "❤❤", "❤", "빈피" };
-
-        // 열 헤더 (스테이지명)
-        float[] stageX = { -570f, 0f, 570f };
-        for (int s = 0; s < 3; s++)
-        {
-            MakeText(panel.transform, $"StageHeader{s}",
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(stageX[s], 245), new Vector2(330, 38),
-                $"Stage {s + 1} · {StageNames[s]}", 20,
-                new Color(0.75f, 0.85f, 1f), TextAnchor.MiddleCenter);
-        }
-
-        // 행 헤더 (HP)
-        float[] hpY = { 175f, 25f, -125f, -275f };
-        for (int h = 0; h < 4; h++)
-        {
-            MakeText(panel.transform, $"HPHeader{h}",
-                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-                new Vector2(72, hpY[h]), new Vector2(100, 34),
-                hpLabels[h], 18, new Color(1f, 0.5f, 0.55f), TextAnchor.MiddleCenter);
-        }
-
-        // 셀 빌드
-        for (int s = 0; s < 3; s++)
-        {
-            for (int h = 0; h < 4; h++)
-            {
-                int hp = hpOrder[h];
-                BuildCell(panel.transform, s, h, hp, stageX[s], hpY[h]);
-            }
-        }
-
-        // ── 닫기 버튼 ─────────────────────────────────────────────────────
-        var closeBtn = MakeButton(panel.transform, "CloseBtn",
-            new Vector2(0.5f, 0f), new Vector2(0, 60), new Vector2(200, 52));
-        SetBtnStyle(closeBtn, "닫기", new Color(0.28f, 0.28f, 0.33f));
-        closeBtn.onClick.AddListener(Hide);
-
-        // ── 전체화면 감상 패널 ────────────────────────────────────────────
-        fullViewPanel = new GameObject("FullView");
-        fullViewPanel.transform.SetParent(panel.transform, false);
-        var frt = fullViewPanel.AddComponent<RectTransform>();
-        frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one; frt.sizeDelta = Vector2.zero;
-        fullViewPanel.AddComponent<Image>().color = new Color(0, 0, 0, 0.94f);
-
-        fullViewImage = new GameObject("FullImg").AddComponent<Image>();
-        fullViewImage.transform.SetParent(fullViewPanel.transform, false);
-        var irt = fullViewImage.rectTransform;
-        irt.anchorMin = new Vector2(0.1f, 0.1f);
-        irt.anchorMax = new Vector2(0.9f, 0.9f);
-        irt.sizeDelta = Vector2.zero;
-        fullViewImage.preserveAspect = true;
-
-        var fvClose = MakeButton(fullViewPanel.transform, "FVClose",
-            new Vector2(1f, 1f), new Vector2(-70, -70), new Vector2(120, 50));
-        SetBtnStyle(fvClose, "✕ 닫기", new Color(0.5f, 0.2f, 0.2f));
-        fvClose.onClick.AddListener(() => fullViewPanel.SetActive(false));
-
-        fullViewPanel.SetActive(false);
-        panel.SetActive(false);
+        stageSelectPanel.SetActive(false);
+        detailPanel.SetActive(false);
     }
 
-    private void BuildCell(Transform parent, int stageIdx, int hpIdx, int hp,
-                            float xPos, float yPos)
+    // ── 스테이지 선택 패널 ────────────────────────────────────────────────
+    private void BuildStageSelectPanel(Transform canvasRoot)
     {
-        // 셀 배경
-        var cell = new GameObject($"Cell_S{stageIdx + 1}_HP{hp}");
+        stageSelectPanel = new GameObject("GalleryStageSelect");
+        stageSelectPanel.transform.SetParent(canvasRoot, false);
+        var rt = stageSelectPanel.AddComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.sizeDelta = Vector2.zero;
+        stageSelectPanel.AddComponent<Image>().color = new Color(0.04f, 0.04f, 0.08f, 1f);
+
+        MakeText(stageSelectPanel.transform, "Title",
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0, -70), new Vector2(600, 70),
+            "🖼  갤 러 리", 48, new Color(0.85f, 0.88f, 1f), TextAnchor.MiddleCenter);
+
+        MakeText(stageSelectPanel.transform, "Sub",
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0, -130), new Vector2(700, 38),
+            "스테이지를 선택하세요", 22, new Color(0.55f, 0.65f, 0.75f), TextAnchor.MiddleCenter);
+
+        // 스테이지 카드 3개
+        float[] xPos = { -430f, 0f, 430f };
+        Color[] colors =
+        {
+            new Color(0.35f, 0.65f, 1.00f),
+            new Color(0.70f, 0.35f, 1.00f),
+            new Color(0.95f, 0.85f, 0.30f),
+        };
+        for (int i = 0; i < 3; i++)
+        {
+            int stage = i + 1;
+            var card = new GameObject($"StageCard{stage}");
+            card.transform.SetParent(stageSelectPanel.transform, false);
+            var crt = card.AddComponent<RectTransform>();
+            crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
+            crt.anchoredPosition = new Vector2(xPos[i], 20f);
+            crt.sizeDelta = new Vector2(340f, 280f);
+            card.AddComponent<Image>().color = new Color(0.08f, 0.10f, 0.17f, 1f);
+
+            // 컬러 바
+            var bar = new GameObject("Bar"); bar.transform.SetParent(card.transform, false);
+            var brt = bar.AddComponent<RectTransform>();
+            brt.anchorMin = new Vector2(0,1); brt.anchorMax = new Vector2(1,1);
+            brt.pivot = new Vector2(0.5f,1f); brt.anchoredPosition = Vector2.zero; brt.sizeDelta = new Vector2(0,8);
+            bar.AddComponent<Image>().color = colors[i];
+
+            MakeText(card.transform, "StageLbl",
+                new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
+                new Vector2(0, 60), new Vector2(300, 50),
+                $"STAGE {stage}", 30, colors[i], TextAnchor.MiddleCenter);
+
+            MakeText(card.transform, "CharLbl",
+                new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
+                new Vector2(0, 10), new Vector2(300, 40),
+                StageNames[i], 24, Color.white, TextAnchor.MiddleCenter);
+
+            MakeText(card.transform, "CountLbl",
+                new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
+                new Vector2(0, -35), new Vector2(300, 32),
+                "8장", 18, new Color(0.6f,0.7f,0.8f), TextAnchor.MiddleCenter);
+
+            var btn = card.AddComponent<Button>();
+            btn.transition = Selectable.Transition.ColorTint;
+            var colors2 = btn.colors;
+            colors2.highlightedColor = new Color(1.2f,1.2f,1.2f,1f);
+            btn.colors = colors2;
+            btn.onClick.AddListener(() => OpenDetail(stage));
+        }
+
+        // 닫기
+        var closeBtn = MakeButton(stageSelectPanel.transform, "CloseBtn",
+            new Vector2(0.5f, 0f), new Vector2(0, 60), new Vector2(200, 52));
+        SetBtnStyle(closeBtn, "닫기", new Color(0.28f, 0.28f, 0.33f));
+        closeBtn.onClick.AddListener(() => { Hide(); TitleScreen.Instance?.Show(); });
+    }
+
+    // ── 상세 패널 ─────────────────────────────────────────────────────────
+    private void BuildDetailPanel(Transform canvasRoot)
+    {
+        detailPanel = new GameObject("GalleryDetail");
+        detailPanel.transform.SetParent(canvasRoot, false);
+        var rt = detailPanel.AddComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.sizeDelta = Vector2.zero;
+        detailPanel.AddComponent<Image>().color = new Color(0.04f, 0.04f, 0.08f, 1f);
+
+        detailTitle = MakeText(detailPanel.transform, "DetailTitle",
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0, -65), new Vector2(800, 64),
+            "", 38, new Color(0.85f, 0.88f, 1f), TextAnchor.MiddleCenter);
+
+        // 행 레이블
+        string[] rowLabels = { "캐릭터 초상화", "스테이지 · 패배" };
+        float[]  rowY      = { 160f, -50f };
+        for (int r = 0; r < ROWS; r++)
+        {
+            MakeText(detailPanel.transform, $"RowLabel{r}",
+                new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
+                new Vector2(62f, rowY[r] + 88f), new Vector2(160f, 30f),
+                rowLabels[r], 16, new Color(0.55f, 0.65f, 0.8f), TextAnchor.MiddleCenter);
+        }
+
+        // 열 레이블 행1 (HP)
+        string[] hpLabels   = { "HP 3 (풀피)", "HP 2", "HP 1", "HP 0" };
+        string[] otherLabels = { "배경", "클리어", "슬라임 패배", "빅슬라임 패배" };
+        float[]  colX        = { -430f, -145f, 145f, 430f };
+
+        for (int c = 0; c < COLS; c++)
+        {
+            // 행1 헤더
+            MakeText(detailPanel.transform, $"HpHdr{c}",
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(colX[c], 275f), new Vector2(240f, 28f),
+                hpLabels[c], 16, new Color(1f, 0.5f, 0.55f), TextAnchor.MiddleCenter);
+
+            // 행2 헤더
+            MakeText(detailPanel.transform, $"OtherHdr{c}",
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(colX[c], 70f), new Vector2(240f, 28f),
+                otherLabels[c], 16, new Color(0.7f, 0.85f, 0.7f), TextAnchor.MiddleCenter);
+        }
+
+        // 셀 그리드 빌드
+        float[] cellY = { 180f, -30f };
+        for (int r = 0; r < ROWS; r++)
+            for (int c = 0; c < COLS; c++)
+                BuildCell(detailPanel.transform, r, c, colX[c], cellY[r]);
+
+        // 뒤로
+        var backBtn = MakeButton(detailPanel.transform, "BackBtn",
+            new Vector2(0.5f, 0f), new Vector2(0, 60), new Vector2(200, 52));
+        SetBtnStyle(backBtn, "← 뒤로", new Color(0.28f, 0.28f, 0.33f));
+        backBtn.onClick.AddListener(() =>
+        {
+            detailPanel.SetActive(false);
+            stageSelectPanel.SetActive(true);
+        });
+    }
+
+    private void BuildCell(Transform parent, int row, int col, float xPos, float yPos)
+    {
+        var cell = new GameObject($"Cell_{row}_{col}");
         cell.transform.SetParent(parent, false);
         var crt = cell.AddComponent<RectTransform>();
         crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
         crt.anchoredPosition = new Vector2(xPos, yPos);
-        crt.sizeDelta = new Vector2(290, 130);
+        crt.sizeDelta = new Vector2(230f, 160f);
         cell.AddComponent<Image>().color = new Color(0.1f, 0.12f, 0.20f);
 
         // 이미지 슬롯
-        var imgSlot = new GameObject("ImgSlot");
-        imgSlot.transform.SetParent(cell.transform, false);
-        var irt = imgSlot.AddComponent<RectTransform>();
-        irt.anchorMin = new Vector2(0f, 0f); irt.anchorMax = new Vector2(0.55f, 1f);
-        irt.offsetMin = new Vector2(4, 4); irt.offsetMax = new Vector2(-2, -4);
-        var img = imgSlot.AddComponent<Image>();
+        var imgGo = new GameObject("Img"); imgGo.transform.SetParent(cell.transform, false);
+        var irt = imgGo.AddComponent<RectTransform>();
+        irt.anchorMin = Vector2.zero; irt.anchorMax = Vector2.one;
+        irt.offsetMin = new Vector2(4,4); irt.offsetMax = new Vector2(-4,-4);
+        var img = imgGo.AddComponent<Image>();
         img.preserveAspect = true;
-        cellImages[stageIdx, hpIdx] = img;
+        cellImgs[row, col] = img;
 
-        // 잠금 아이콘 (잠긴 상태)
-        var lockGo = new GameObject("LockIcon");
-        lockGo.transform.SetParent(cell.transform, false);
+        // 잠금 아이콘
+        var lockGo = new GameObject("Lock"); lockGo.transform.SetParent(cell.transform, false);
         var lrt = lockGo.AddComponent<RectTransform>();
         lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.sizeDelta = Vector2.zero;
-        var lockImg = lockGo.AddComponent<Image>();
-        lockImg.color = new Color(0.08f, 0.09f, 0.14f, 0.9f);
+        lockGo.AddComponent<Image>().color = new Color(0.07f, 0.08f, 0.13f, 0.92f);
         MakeText(lockGo.transform, "LockEmoji",
-            new Vector2(0f, 0f), new Vector2(0.55f, 1f), Vector2.zero, Vector2.zero,
-            "🔒", 36, new Color(0.5f, 0.5f, 0.6f), TextAnchor.MiddleCenter);
-        lockIcons[stageIdx, hpIdx] = lockGo;
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+            "🔒", 38, new Color(0.5f, 0.5f, 0.6f), TextAnchor.MiddleCenter);
+        lockIcons[row, col] = lockGo;
 
-        // 설명 텍스트
-        string hpLabel = hp switch { 3 => "풀피", 2 => "HP 2", 1 => "HP 1", _ => "HP 0" };
-        MakeText(cell.transform, "Label",
-            new Vector2(0.55f, 0.5f), new Vector2(1f, 1f),
-            Vector2.zero, Vector2.zero,
-            hpLabel, 18, new Color(0.75f, 0.8f, 0.9f), TextAnchor.MiddleCenter);
-
-        // 클릭 버튼 (해금된 경우)
-        int s = stageIdx + 1, h = hp; // capture
+        // 클릭 버튼
+        int r = row, c = col;
         var btn = cell.AddComponent<Button>();
         btn.transition = Selectable.Transition.None;
-        btn.onClick.AddListener(() => OnCellClick(s, h));
+        btn.onClick.AddListener(() => OnCellClick(r, c));
     }
 
-    // ── 공개 API ──────────────────────────────────────────────────────────
+    // ── 전체화면 패널 ─────────────────────────────────────────────────────
+    private void BuildFullViewPanel(Transform canvasRoot)
+    {
+        fullViewPanel = new GameObject("GalleryFullView");
+        fullViewPanel.transform.SetParent(canvasRoot, false);
+        var rt = fullViewPanel.AddComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.sizeDelta = Vector2.zero;
+        fullViewPanel.AddComponent<Image>().color = new Color(0,0,0, 0.94f);
+
+        fullViewImage = new GameObject("FullImg").AddComponent<Image>();
+        fullViewImage.transform.SetParent(fullViewPanel.transform, false);
+        var irt = fullViewImage.rectTransform;
+        irt.anchorMin = new Vector2(0.08f, 0.08f);
+        irt.anchorMax = new Vector2(0.92f, 0.92f);
+        irt.sizeDelta = Vector2.zero;
+        fullViewImage.preserveAspect = true;
+
+        var closeBtn = MakeButton(fullViewPanel.transform, "FVClose",
+            new Vector2(1f,1f), new Vector2(-70,-70), new Vector2(120,50));
+        SetBtnStyle(closeBtn, "✕ 닫기", new Color(0.5f,0.2f,0.2f));
+        closeBtn.onClick.AddListener(() => fullViewPanel.SetActive(false));
+        fullViewPanel.SetActive(false);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 공개 API
+    // ═══════════════════════════════════════════════════════════════════════
     public void Show()
     {
-        RefreshAll();
-        panel.SetActive(true);
+        stageSelectPanel.SetActive(true);
+        detailPanel.SetActive(false);
+        fullViewPanel.SetActive(false);
     }
 
-    public void Hide() => panel.SetActive(false);
+    public void Hide()
+    {
+        stageSelectPanel.SetActive(false);
+        detailPanel.SetActive(false);
+        fullViewPanel.SetActive(false);
+    }
 
-    /// <summary>HP가 낮아질 때 PortraitPanel에서 호출</summary>
+    private void OpenDetail(int stage)
+    {
+        currentStage = stage;
+        detailTitle.text = $"STAGE {stage}  ·  {StageNames[stage - 1]}";
+        stageSelectPanel.SetActive(false);
+        detailPanel.SetActive(true);
+        RefreshDetail();
+    }
+
+    /// <summary>갤러리 상태 전체 갱신 (PortraitPanel 등 외부에서 호출)</summary>
     public void RefreshAll()
     {
+        if (currentStage > 0 && detailPanel.activeSelf)
+            RefreshDetail();
+    }
+
+    private void RefreshDetail()
+    {
+        int s = currentStage;
         int[] hpOrder = { 3, 2, 1, 0 };
-        for (int s = 0; s < 3; s++)
+
+        // Row 0: 초상화 HP3·2·1·0
+        for (int c = 0; c < 4; c++)
         {
-            for (int hIdx = 0; hIdx < 4; hIdx++)
-            {
-                int hp        = hpOrder[hIdx];
-                bool unlocked = ProgressManager.IsGalleryUnlocked(s + 1, hp);
+            int hp      = hpOrder[c];
+            bool unlocked = ProgressManager.IsGalleryUnlocked(s, hp);
+            SetCell(0, c, unlocked,
+                unlocked ? LoadSprite($"Portraits/Stage{s}_HP{hp}") : null);
+        }
 
-                lockIcons[s, hIdx].SetActive(!unlocked);
-
-                if (unlocked)
-                {
-                    // 이미지 로드 (미리 로드되지 않은 경우)
-                    if (cellImages[s, hIdx].sprite == null)
-                    {
-                        var sprite = LoadPortrait(s + 1, hp);
-                        cellImages[s, hIdx].sprite = sprite;
-                        cellImages[s, hIdx].color  = sprite != null ? Color.white : new Color(0.2f, 0.25f, 0.4f);
-                    }
-                }
-                else
-                {
-                    cellImages[s, hIdx].sprite = null;
-                    cellImages[s, hIdx].color  = Color.clear;
-                }
-            }
+        // Row 1 col 0: 배경
+        {
+            bool unlocked = ProgressManager.IsBackgroundUnlocked(s);
+            SetCell(1, 0, unlocked,
+                unlocked ? LoadSprite($"Stage/Background_{s}") : null);
+        }
+        // Row 1 col 1: 클리어
+        {
+            bool unlocked = ProgressManager.IsClearUnlocked(s);
+            SetCell(1, 1, unlocked,
+                unlocked ? LoadSprite($"Stage/StageClear_{s}") : null);
+        }
+        // Row 1 col 2·3: 몬스터별 패배
+        for (int k = 0; k < KillerKeys.Length && k < 2; k++)
+        {
+            bool unlocked = ProgressManager.IsDefeatUnlocked(s, KillerKeys[k]);
+            SetCell(1, 2 + k, unlocked,
+                unlocked ? LoadSprite($"Defeat/GameOver_Stage{s}_{KillerKeys[k]}") : null);
         }
     }
 
-    private void OnCellClick(int stage, int hp)
+    private void SetCell(int row, int col, bool unlocked, Sprite sprite)
     {
-        if (!ProgressManager.IsGalleryUnlocked(stage, hp)) return;
+        lockIcons[row, col].SetActive(!unlocked);
+        if (unlocked && sprite != null)
+        {
+            cellImgs[row, col].sprite = sprite;
+            cellImgs[row, col].color  = Color.white;
+        }
+        else if (!unlocked)
+        {
+            cellImgs[row, col].sprite = null;
+            cellImgs[row, col].color  = Color.clear;
+        }
+        else
+        {
+            // 해금됐지만 이미지 파일 없음 — 회색 표시
+            cellImgs[row, col].sprite = null;
+            cellImgs[row, col].color  = new Color(0.2f, 0.25f, 0.4f);
+        }
+    }
 
-        var sprite = LoadPortrait(stage, hp);
-        if (sprite == null) return;
-
-        fullViewImage.sprite = sprite;
+    private void OnCellClick(int row, int col)
+    {
+        var img = cellImgs[row, col];
+        if (img.sprite == null) return;
+        fullViewImage.sprite = img.sprite;
         fullViewPanel.SetActive(true);
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────────────
-    private Sprite LoadPortrait(int stage, int hp)
+    private static Sprite LoadSprite(string path)
     {
-        string path = $"Portraits/Stage{stage}_HP{hp}";
         Sprite sp = Resources.Load<Sprite>(path);
         if (sp != null) return sp;
         Texture2D tex = Resources.Load<Texture2D>(path);
         if (tex == null) return null;
-        return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+        return Sprite.Create(tex, new Rect(0,0,tex.width,tex.height), new Vector2(0.5f,0.5f));
     }
 
     private void SetBtnStyle(Button btn, string label, Color color)
@@ -238,8 +376,7 @@ public class GalleryScreen : MonoBehaviour
     private Button MakeButton(Transform parent, string name,
         Vector2 anchor, Vector2 pos, Vector2 size)
     {
-        var go = new GameObject(name);
-        go.transform.SetParent(parent, false);
+        var go = new GameObject(name); go.transform.SetParent(parent, false);
         var rt = go.AddComponent<RectTransform>();
         rt.anchorMin = rt.anchorMax = anchor;
         rt.anchoredPosition = pos; rt.sizeDelta = size;
@@ -249,8 +386,7 @@ public class GalleryScreen : MonoBehaviour
         var lrt = lgo.AddComponent<RectTransform>();
         lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one; lrt.sizeDelta = Vector2.zero;
         var txt = lgo.AddComponent<Text>();
-        txt.fontSize = 22; txt.color = Color.white;
-        txt.alignment = TextAnchor.MiddleCenter;
+        txt.fontSize = 22; txt.color = Color.white; txt.alignment = TextAnchor.MiddleCenter;
         txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         return btn;
     }
@@ -264,8 +400,8 @@ public class GalleryScreen : MonoBehaviour
         rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
         rt.anchoredPosition = pos; rt.sizeDelta = size;
         var txt = go.AddComponent<Text>();
-        txt.text = content; txt.fontSize = fontSize;
-        txt.color = color; txt.alignment = alignment;
+        txt.text = content; txt.fontSize = fontSize; txt.color = color;
+        txt.alignment = alignment;
         txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         txt.supportRichText = true;
         return txt;

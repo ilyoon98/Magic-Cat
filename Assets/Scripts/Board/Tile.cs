@@ -11,6 +11,7 @@ public class Tile : MonoBehaviour
     [SerializeField] private Color highlightColor = new Color(0.5f, 0.8f, 1f);
     [SerializeField] private Color selectedColor = new Color(1f, 0.9f, 0.3f);
     [SerializeField] private Color dangerColor = new Color(1f, 0.4f, 0.4f);
+    [SerializeField] private Color skillColor = new Color(0.25f, 1f, 0.65f);   // 스킬 경로 미리보기 (청록)
 
     private void Awake()
     {
@@ -29,7 +30,7 @@ public class Tile : MonoBehaviour
         SetHighlight(HighlightType.None);
     }
 
-    public enum HighlightType { None, Move, Attack, Selected, Danger }
+    public enum HighlightType { None, Move, Attack, Selected, Danger, Skill }
 
     public void SetHighlight(HighlightType type)
     {
@@ -38,8 +39,9 @@ public class Tile : MonoBehaviour
         {
             HighlightType.Move     => highlightColor,
             HighlightType.Attack   => dangerColor,
-            HighlightType.Danger   => dangerColor,   // 공격 예고 (빨간색)
+            HighlightType.Danger   => dangerColor,
             HighlightType.Selected => selectedColor,
+            HighlightType.Skill    => skillColor,    // 스킬 경로 미리보기 (청록)
             _                      => normalColor
         };
     }

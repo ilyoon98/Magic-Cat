@@ -70,6 +70,12 @@ public abstract class Unit : MonoBehaviour
         currentHp -= amount;
         currentHp = Mathf.Max(0, currentHp);
 
+        // 피격 이펙트
+        if (this is PlayerUnit)
+            EffectManager.Instance?.PlayPlayerHit(transform.position);
+        else
+            EffectManager.Instance?.PlayBlood(transform.position);
+
         // 데미지 팝업
         DamagePopup.Create(transform.position, amount, isHeal: false, isCritical: isCritical);
 

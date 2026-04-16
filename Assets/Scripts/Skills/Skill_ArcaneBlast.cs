@@ -5,6 +5,8 @@ using UnityEngine;
 /// </summary>
 public class Skill_ArcaneBlast : SkillBase
 {
+    public override SkillPreviewType PreviewType => SkillPreviewType.Directional;
+
     private void Awake()
     {
         skillName   = "마력공격";

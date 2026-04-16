@@ -25,6 +25,15 @@ public class TurnManager : MonoBehaviour
     public void SetPlayer(PlayerUnit p) { player = p; }
     public PlayerUnit GetPlayer() => player;
 
+    /// <summary>게임 재시작 시 처리 중 상태와 턴 수를 초기화</summary>
+    public void Reset()
+    {
+        StopAllCoroutines(); // 진행 중인 적 턴 코루틴 강제 중단
+        isProcessing = false;
+        CurrentPhase = TurnPhase.PlayerTurn;
+        TurnCount    = 0;
+    }
+
     private void TickAllStatusEffects()
     {
         // 플레이어
@@ -40,17 +49,21 @@ public class TurnManager : MonoBehaviour
     // ── 플레이어 턴 시작 ──────────────────────────────────────────────────
     public void StartPlayerTurn()
     {
+        if (player == null) return; // 아직 플레이어가 배치되지 않은 경우 방어
         TurnCount++;
         CurrentPhase = TurnPhase.PlayerTurn;
         isProcessing = false;
         player.StartTurn();
         GameUI.Instance?.Refresh();
+        // 이동 가능 타일 하이라이트 갱신 (턴 시작 시 즉시 표시)
+        player.GetComponent<PlayerInputController>()?.RefreshMoveHighlight();
     }
 
     // ── 플레이어가 행동을 완료하면 즉시 호출 ──────────────────────────────
     public void OnPlayerActed()
     {
         if (isProcessing) return;
+        if (GameManager.Instance?.CurrentState != GameManager.GameState.PlayerTurn) return;
         isProcessing = true;
         GameUI.Instance?.Refresh();
         StartCoroutine(RunEnemyTurn());
@@ -60,6 +73,7 @@ public class TurnManager : MonoBehaviour
     public void SkipTurn()
     {
         if (CurrentPhase != TurnPhase.PlayerTurn || isProcessing) return;
+        if (GameManager.Instance?.CurrentState != GameManager.GameState.PlayerTurn) return;
         isProcessing = true;
         GameUI.Instance?.Refresh();
         StartCoroutine(RunEnemyTurn());
@@ -70,6 +84,8 @@ public class TurnManager : MonoBehaviour
     {
         CurrentPhase = TurnPhase.EnemyTurn;
         GameUI.Instance?.Refresh();
+        // 적 턴 시작 시 이동 하이라이트 제거
+        player?.GetComponent<PlayerInputController>()?.RefreshMoveHighlight();
 
         yield return new WaitForSeconds(0.15f);
 

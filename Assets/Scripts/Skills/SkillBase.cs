@@ -5,6 +5,11 @@ using UnityEngine;
 /// </summary>
 public abstract class SkillBase : MonoBehaviour
 {
+    /// <summary>스킬 미리보기 타입 — PlayerInputController에서 확인용</summary>
+    public enum SkillPreviewType { None, Directional, Teleport }
+    /// <summary>기본값: 즉시 발동 (미리보기 없음). 방향/이동 스킬은 오버라이드</summary>
+    public virtual SkillPreviewType PreviewType => SkillPreviewType.None;
+
     [Header("Skill Info")]
     public string skillName;
     [TextArea] public string description;

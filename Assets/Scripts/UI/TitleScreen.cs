@@ -53,25 +53,69 @@ public class TitleScreen : MonoBehaviour
             "F1  치트 패널",
             18, new Color(0.65f, 0.75f, 0.85f), TextAnchor.MiddleCenter);
 
-        // ── START 버튼 ────────────────────────────────────────────────────
+        // ── 게임 시작 버튼 ────────────────────────────────────────────────
         var btnGo = new GameObject("StartButton");
         btnGo.transform.SetParent(panel.transform, false);
         var brt = btnGo.AddComponent<RectTransform>();
         brt.anchorMin = new Vector2(0.5f, 0.5f);
         brt.anchorMax = new Vector2(0.5f, 0.5f);
-        brt.anchoredPosition = new Vector2(0f, -290f);
-        brt.sizeDelta = new Vector2(300f, 72f);
-
+        brt.anchoredPosition = new Vector2(0f, -270f);
+        brt.sizeDelta = new Vector2(300f, 68f);
         var btnImg = btnGo.AddComponent<Image>();
         btnImg.color = new Color(0.2f, 0.5f, 0.95f);
-
         var btn = btnGo.AddComponent<Button>();
         btn.onClick.AddListener(OnStartClicked);
+        MakeText(btnGo.transform, "StartLabel",
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+            "게임 시작", 34, Color.white, TextAnchor.MiddleCenter);
 
-        var startLbl = MakeText(btnGo.transform, "StartLabel",
-            Vector2.zero, Vector2.one,
-            Vector2.zero, Vector2.zero,
-            "게임 시작", 36, Color.white, TextAnchor.MiddleCenter);
+        // ── 갤러리 버튼 ───────────────────────────────────────────────────
+        var galGo = new GameObject("GalleryButton");
+        galGo.transform.SetParent(panel.transform, false);
+        var grt = galGo.AddComponent<RectTransform>();
+        grt.anchorMin = new Vector2(0.5f, 0.5f);
+        grt.anchorMax = new Vector2(0.5f, 0.5f);
+        grt.anchoredPosition = new Vector2(0f, -360f);
+        grt.sizeDelta = new Vector2(300f, 56f);
+        var galImg = galGo.AddComponent<Image>();
+        galImg.color = new Color(0.45f, 0.25f, 0.65f);
+        var galBtn = galGo.AddComponent<Button>();
+        galBtn.onClick.AddListener(() => { Hide(); GalleryScreen.Instance?.Show(); });
+        MakeText(galGo.transform, "GalleryLabel",
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+            "🖼 갤러리", 28, Color.white, TextAnchor.MiddleCenter);
+
+        // ── 설정 버튼 ─────────────────────────────────────────────────────
+        var settGo = new GameObject("SettingsButton");
+        settGo.transform.SetParent(panel.transform, false);
+        var srt = settGo.AddComponent<RectTransform>();
+        srt.anchorMin = new Vector2(0.5f, 0.5f);
+        srt.anchorMax = new Vector2(0.5f, 0.5f);
+        srt.anchoredPosition = new Vector2(0f, -436f);
+        srt.sizeDelta = new Vector2(300f, 56f);
+        var settImg = settGo.AddComponent<Image>();
+        settImg.color = new Color(0.22f, 0.35f, 0.45f);
+        var settBtn = settGo.AddComponent<Button>();
+        settBtn.onClick.AddListener(() => SettingsPanel.Instance?.Show());
+        MakeText(settGo.transform, "SettingsLabel",
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+            "⚙ 설정", 28, Color.white, TextAnchor.MiddleCenter);
+
+        // ── 게임 종료 버튼 ────────────────────────────────────────────────
+        var quitGo = new GameObject("QuitButton");
+        quitGo.transform.SetParent(panel.transform, false);
+        var qrt = quitGo.AddComponent<RectTransform>();
+        qrt.anchorMin = new Vector2(0.5f, 0.5f);
+        qrt.anchorMax = new Vector2(0.5f, 0.5f);
+        qrt.anchoredPosition = new Vector2(0f, -508f);
+        qrt.sizeDelta = new Vector2(300f, 56f);
+        var quitImg = quitGo.AddComponent<Image>();
+        quitImg.color = new Color(0.45f, 0.12f, 0.12f);
+        var quitBtn = quitGo.AddComponent<Button>();
+        quitBtn.onClick.AddListener(() => Application.Quit());
+        MakeText(quitGo.transform, "QuitLabel",
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+            "✕ 종료", 28, Color.white, TextAnchor.MiddleCenter);
 
         // ── 장식 — 이모지 고양이 ──────────────────────────────────────────
         MakeText(panel.transform, "CatLeft",

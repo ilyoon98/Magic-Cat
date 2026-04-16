@@ -8,6 +8,8 @@ public class Skill_ElementFocus : SkillBase
 {
     private int damageMultiplier = 3;
 
+    public override SkillPreviewType PreviewType => SkillPreviewType.Directional;
+
     private void Awake()
     {
         skillName   = "원소집중";

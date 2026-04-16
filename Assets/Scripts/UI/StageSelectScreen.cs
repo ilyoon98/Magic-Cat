@@ -26,6 +26,11 @@ public class StageSelectScreen : MonoBehaviour
 
     private GameObject panel;
 
+    // 잠금 상태 갱신용 참조
+    private Button[]     startBtns    = new Button[3];
+    private GameObject[] lockOverlays = new GameObject[3]; // 잠긴 카드 어두운 오버레이
+    private Image[]      stageImgs    = new Image[3];      // 스테이지 배경 이미지
+
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -79,6 +84,19 @@ public class StageSelectScreen : MonoBehaviour
         crt.sizeDelta        = new Vector2(360, 480);
         card.AddComponent<Image>().color = new Color(0.08f, 0.10f, 0.17f, 1f);
 
+        // ── 스테이지 배경 이미지 (카드 전체 영역, 잠금시 숨김) ───────────────
+        var imgGo = new GameObject("StageImage");
+        imgGo.transform.SetParent(card.transform, false);
+        var imgRt = imgGo.AddComponent<RectTransform>();
+        imgRt.anchorMin = Vector2.zero; imgRt.anchorMax = Vector2.one; imgRt.sizeDelta = Vector2.zero;
+        var stageImg = imgGo.AddComponent<Image>();
+        stageImg.preserveAspect = false; // 카드에 꽉 채움
+        // 이미지 로드 시도 (없으면 투명)
+        Sprite stageSp = LoadStageImage(stage);
+        if (stageSp != null) { stageImg.sprite = stageSp; stageImg.color = new Color(1f, 1f, 1f, 0.18f); }
+        else stageImg.color = Color.clear;
+        stageImgs[stage - 1] = stageImg;
+
         // ── 상단 컬러 바 ──────────────────────────────────────────────────
         var bar = new GameObject("TopBar");
         bar.transform.SetParent(card.transform, false);
@@ -112,8 +130,8 @@ public class StageSelectScreen : MonoBehaviour
         // ── 스킬 설명 ─────────────────────────────────────────────────────
         MakeText(card.transform, "Skills",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, -72), new Vector2(316, 80),
-            info.skills, 16, new Color(0.68f, 0.74f, 0.82f), TextAnchor.MiddleCenter);
+            new Vector2(0, -72), new Vector2(316, 90),
+            info.skills, 20, new Color(0.68f, 0.74f, 0.82f), TextAnchor.MiddleCenter);
 
         // ── HP 표시 ───────────────────────────────────────────────────────
         MakeText(card.transform, "HP",
@@ -124,8 +142,8 @@ public class StageSelectScreen : MonoBehaviour
         // ── 맵 구성 표시 ──────────────────────────────────────────────────
         MakeText(card.transform, "Maps",
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-            new Vector2(0, 68), new Vector2(290, 28),
-            "MAP 1  ·  MAP 2  ·  BOSS", 15,
+            new Vector2(0, 68), new Vector2(290, 32),
+            "MAP 1  ·  MAP 2  ·  BOSS", 20,
             new Color(0.50f, 0.62f, 0.72f), TextAnchor.MiddleCenter);
 
         // ── 시작 버튼 ─────────────────────────────────────────────────────
@@ -134,18 +152,69 @@ public class StageSelectScreen : MonoBehaviour
         SetBtnStyle(startBtn, $"스테이지 {stage} 시작", info.color);
         int s = stage; // closure capture
         startBtn.onClick.AddListener(() => StartFromStage(s));
+        startBtns[stage - 1] = startBtn;
+
+        // ── 잠금 오버레이 (잠긴 스테이지에만 표시) ───────────────────────
+        var lockGo = new GameObject("LockOverlay");
+        lockGo.transform.SetParent(card.transform, false);
+        var lrt2 = lockGo.AddComponent<RectTransform>();
+        lrt2.anchorMin = Vector2.zero; lrt2.anchorMax = Vector2.one; lrt2.sizeDelta = Vector2.zero;
+        lockGo.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
+        // 자물쇠 아이콘 + 텍스트
+        MakeText(lockGo.transform, "LockText",
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0, 10), new Vector2(300, 120),
+            "🔒", 64, new Color(0.7f, 0.7f, 0.8f), TextAnchor.MiddleCenter);
+        MakeText(lockGo.transform, "LockSub",
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0, -55), new Vector2(280, 56),
+            "이전 스테이지 보스를\n클리어하면 해금됩니다", 20,
+            new Color(0.6f, 0.6f, 0.65f), TextAnchor.MiddleCenter);
+        lockOverlays[stage - 1] = lockGo;
     }
 
-    public void Show() => panel.SetActive(true);
+    public void Show()
+    {
+        RefreshLockState();
+        panel.SetActive(true);
+    }
+
     public void Hide() => panel.SetActive(false);
+
+    /// <summary>PlayerPrefs에서 잠금 상태를 읽어 카드 UI를 갱신</summary>
+    private void RefreshLockState()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            bool unlocked = ProgressManager.IsStageUnlocked(i + 1);
+            if (startBtns[i]    != null) startBtns[i].interactable    = unlocked;
+            if (lockOverlays[i] != null) lockOverlays[i].SetActive(!unlocked);
+            // 해금된 경우 이미지를 더 선명하게, 잠긴 경우 투명하게
+            if (stageImgs[i] != null && stageImgs[i].sprite != null)
+                stageImgs[i].color = unlocked
+                    ? new Color(1f, 1f, 1f, 0.28f)
+                    : new Color(1f, 1f, 1f, 0.06f);
+        }
+    }
 
     private void StartFromStage(int stage)
     {
         Hide();
-        GameManager.Instance?.StartGame(stage);
+        // 인트로 풍경 패닝 연출 후 게임 시작 (SpecialSceneController 내부에서 StartGame 호출)
+        SpecialSceneController.Instance?.ShowStageIntro(stage);
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────────────
+    private Sprite LoadStageImage(int stage)
+    {
+        string path = $"Stage/Stage{stage}";
+        Sprite sp = Resources.Load<Sprite>(path);
+        if (sp != null) return sp;
+        Texture2D tex = Resources.Load<Texture2D>(path);
+        if (tex == null) return null;
+        return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f));
+    }
+
     private void SetBtnStyle(Button btn, string label, Color color)
     {
         btn.GetComponent<Image>().color         = color;

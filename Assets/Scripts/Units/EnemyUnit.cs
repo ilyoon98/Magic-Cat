@@ -209,6 +209,14 @@ public class EnemyUnit : Unit
         return null;
     }
 
+    // ── 공격 오버라이드 — 킬러 이름 기록 ───────────────────────────────
+    public override void Attack(Unit target)
+    {
+        // 게임오버 씬 선택을 위해 공격 주체를 기록
+        GameManager.LastKillerName = gameObject.name.Replace(" ", "");
+        base.Attack(target);
+    }
+
     protected override void OnDeath()
     {
         ClearWarning();

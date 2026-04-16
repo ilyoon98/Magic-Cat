@@ -40,6 +40,13 @@ public class StageManager : MonoBehaviour
         foreach (var (dataIndex, pos) in spawnList)
             SpawnEnemy(EnemyDataTable.Get(dataIndex), pos);
 
+        // 배경 이미지 적용
+        BoardBackground.Instance?.SetStage(CurrentStage);
+        ProgressManager.UnlockBackground(CurrentStage);
+
+        // BGM 재생
+        AudioManager.Instance?.PlayBGM($"BGM_Stage{CurrentStage}");
+
         // UI 갱신
         var (charName, portrait, _) = StageCharacters[CurrentStage - 1];
         PortraitPanel.Instance?.SetStage(CurrentStage);
@@ -65,18 +72,31 @@ public class StageManager : MonoBehaviour
 
     private IEnumerator MapClearSequence()
     {
-        // 짧은 딜레이 후 결과 화면 표시
+        // 즉시 입력 차단 (클리어 후 플레이어가 계속 행동하는 버그 방지)
+        GameManager.Instance?.ChangeState(GameManager.GameState.MapClear);
         yield return new UnityEngine.WaitForSeconds(0.4f);
 
         bool isBoss = IsBossMap;
         bool isLast = CurrentStage >= 3 && isBoss;
 
-        ResultScreen.ResultType type;
-        if (isLast)       type = ResultScreen.ResultType.AllClear;
-        else if (isBoss)  type = ResultScreen.ResultType.StageClear;
-        else              type = ResultScreen.ResultType.MapClear;
-
-        ResultScreen.Instance?.Show(type);
+        if (isLast)
+        {
+            // 전체 클리어 — SpecialScene
+            ProgressManager.UnlockClear(CurrentStage);
+            SpecialSceneController.Instance?.ShowAllClear();
+        }
+        else if (isBoss)
+        {
+            // 스테이지 클리어 — 다음 스테이지 해금 후 SpecialScene
+            ProgressManager.UnlockClear(CurrentStage);
+            ProgressManager.UnlockStage(CurrentStage + 1);
+            SpecialSceneController.Instance?.ShowStageClear(CurrentStage);
+        }
+        else
+        {
+            // 일반 맵 클리어 — ResultScreen
+            ResultScreen.Instance?.Show(ResultScreen.ResultType.MapClear);
+        }
     }
 
     // ── 다음 맵으로 진행 (ResultScreen 버튼에서 호출) ────────────────────
@@ -123,10 +143,22 @@ public class StageManager : MonoBehaviour
         // 새 플레이어 오브젝트 생성
         var go = new GameObject("Player");
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite       = UnitSpriteCache.CircleSprite;
-        sr.color        = color;
+
+        // Resources/Units/Player_Stage{N} 이미지 우선 사용, 없으면 원형 폴백
+        Sprite playerSp = UnitSpriteCache.LoadSprite($"Units/Player_Stage{stage}");
+        if (playerSp != null)
+        {
+            sr.sprite = playerSp;
+            sr.color  = Color.white;
+            go.transform.localScale = Vector3.one * 0.95f;
+        }
+        else
+        {
+            sr.sprite = UnitSpriteCache.CircleSprite;
+            sr.color  = color;
+            go.transform.localScale = Vector3.one * 0.72f;
+        }
         sr.sortingOrder = 5;
-        go.transform.localScale = Vector3.one * 0.72f;
 
         PlayerUnit newPlayer = stage switch
         {
@@ -220,17 +252,30 @@ public class StageManager : MonoBehaviour
     // ── 적 스폰 ───────────────────────────────────────────────────────────
     private void SpawnEnemy(EnemyDataTable.EnemyData data, Vector2Int pos)
     {
-        Color color = data.IsBoss
+        Color fallbackColor = data.IsBoss
             ? new Color(0.85f, 0.2f, 0.2f)
             : new Color(1f, 0.45f, 0.45f);
-        float scale = data.IsBoss ? 0.85f : 0.65f;
+        float fallbackScale = data.IsBoss ? 0.85f : 0.65f;
 
         var go = new GameObject(data.Name);
         var sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite       = UnitSpriteCache.CircleSprite;
-        sr.color        = color;
+
+        // Resources/Units/{이름(공백제거)} 이미지 우선 사용, 없으면 원형 폴백
+        string spriteName = data.Name.Replace(" ", "");
+        Sprite enemySp = UnitSpriteCache.LoadSprite($"Units/{spriteName}");
+        if (enemySp != null)
+        {
+            sr.sprite = enemySp;
+            sr.color  = Color.white;
+            go.transform.localScale = Vector3.one * (data.IsBoss ? 1.05f : 0.90f);
+        }
+        else
+        {
+            sr.sprite = UnitSpriteCache.CircleSprite;
+            sr.color  = fallbackColor;
+            go.transform.localScale = Vector3.one * fallbackScale;
+        }
         sr.sortingOrder = 5;
-        go.transform.localScale = Vector3.one * scale;
 
         var enemy = go.AddComponent<EnemyUnit>();
         enemy.maxHp        = data.HP;

@@ -48,8 +48,57 @@ public static class ProgressManager
     {
         for (int s = 2; s <= 3; s++) UnlockStage(s);
         for (int s = 1; s <= 3; s++)
+        {
             for (int h = 0; h <= 2; h++) UnlockGallery(s, h);
+            UnlockClear(s);
+            UnlockBackground(s);
+            UnlockDefeat(s, "Slime");
+            UnlockDefeat(s, "BigSlime");
+        }
         Debug.Log("[Progress] 전체 해금 완료");
+    }
+
+    // ── 몬스터별 패배 이미지 ──────────────────────────────────────────────
+    /// <summary>해당 몬스터에게 패배 시 자동 해금</summary>
+    public static bool IsDefeatUnlocked(int stage, string killerKey)
+        => PlayerPrefs.GetInt($"Defeat_S{stage}_{killerKey}", 0) == 1;
+
+    public static void UnlockDefeat(int stage, string killerKey)
+    {
+        if (string.IsNullOrEmpty(killerKey)) return;
+        string key = $"Defeat_S{stage}_{killerKey}";
+        if (PlayerPrefs.GetInt(key, 0) == 1) return;
+        PlayerPrefs.SetInt(key, 1);
+        PlayerPrefs.Save();
+        Debug.Log($"[Gallery] Defeat S{stage} by {killerKey} 해금!");
+    }
+
+    // ── 스테이지 클리어 이미지 ────────────────────────────────────────────
+    /// <summary>해당 스테이지 보스 클리어 시 해금</summary>
+    public static bool IsClearUnlocked(int stage)
+        => PlayerPrefs.GetInt($"Clear_S{stage}", 0) == 1;
+
+    public static void UnlockClear(int stage)
+    {
+        string key = $"Clear_S{stage}";
+        if (PlayerPrefs.GetInt(key, 0) == 1) return;
+        PlayerPrefs.SetInt(key, 1);
+        PlayerPrefs.Save();
+        Debug.Log($"[Gallery] Clear S{stage} 해금!");
+    }
+
+    // ── 스테이지 배경 이미지 ──────────────────────────────────────────────
+    /// <summary>해당 스테이지에 처음 진입 시 해금</summary>
+    public static bool IsBackgroundUnlocked(int stage)
+        => PlayerPrefs.GetInt($"BG_S{stage}", 0) == 1;
+
+    public static void UnlockBackground(int stage)
+    {
+        string key = $"BG_S{stage}";
+        if (PlayerPrefs.GetInt(key, 0) == 1) return;
+        PlayerPrefs.SetInt(key, 1);
+        PlayerPrefs.Save();
+        Debug.Log($"[Gallery] Background S{stage} 해금!");
     }
 
     public static void ResetAll()

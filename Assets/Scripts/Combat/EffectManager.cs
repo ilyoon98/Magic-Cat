@@ -19,6 +19,8 @@ public class EffectManager : MonoBehaviour
     public GameObject fxWaterHit;
     public GameObject fxEarthHit;
     public GameObject fxWoodHit;
+    public GameObject fxPlayerHit;   // HeartsPinkExplosion — 플레이어 피격
+    public GameObject fxBlood;       // Blood — 적 피격
 
     private void Awake()
     {
@@ -40,6 +42,8 @@ public class EffectManager : MonoBehaviour
         fxWaterHit      = Load(P + "Water and Bubbles/BubbleBlast.prefab");
         fxEarthHit      = Load(P + "Explosions/ExplosionSimple.prefab");
         fxWoodHit       = Load(P + "Splat/SplatGreen.prefab");
+        fxPlayerHit     = Load(P + "Hearts/HeartsPinkExplosion.prefab");
+        fxBlood         = Load(P + "Blood/Blood.prefab");
 #endif
     }
 
@@ -60,6 +64,8 @@ public class EffectManager : MonoBehaviour
     public void PlayWaterHit(Vector3 pos)   => Spawn(fxWaterHit, pos);
     public void PlayEarthHit(Vector3 pos)   => Spawn(fxEarthHit, pos);
     public void PlayWoodHit(Vector3 pos)    => Spawn(fxWoodHit, pos);
+    public void PlayPlayerHit(Vector3 pos)  => Spawn(fxPlayerHit, pos);
+    public void PlayBlood(Vector3 pos)      => Spawn(fxBlood, pos);
 
     private void Spawn(GameObject prefab, Vector3 pos)
     {
@@ -73,6 +79,15 @@ public class EffectManager : MonoBehaviour
             var main = rootPs.main;
             main.loop       = false;
             main.stopAction = ParticleSystemStopAction.Destroy;
+        }
+
+        // ── 모든 파티클 렌더러를 타일·유닛 위로 올림 ──────────────────────
+        // 타일 Inner sortingOrder=1, 유닛=5, DamagePopup=20
+        // 이펙트는 유닛 바로 위(6)에 렌더링
+        foreach (var pr in go.GetComponentsInChildren<ParticleSystemRenderer>(true))
+        {
+            pr.sortingLayerName = "Default";
+            pr.sortingOrder     = 6;
         }
 
         // 안전망: 최대 지속 시간 후 강제 제거
