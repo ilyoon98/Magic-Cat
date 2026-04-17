@@ -34,6 +34,9 @@ public class PlayerInputController : MonoBehaviour
     private Vector2Int lastPreviewDir = Vector2Int.zero;
     private Vector2Int lastPreviewTarget = new Vector2Int(-999, -999);
 
+    // ── 텔레포트 범위 타일 (파란색 고정 표시) ────────────────────────────
+    private readonly List<Vector2Int> teleportRangeTiles = new List<Vector2Int>();
+
     // ── 공격 미리보기용 타일 목록 ─────────────────────────────────────────
     private readonly List<Vector2Int> attackPreviewTiles = new List<Vector2Int>();
     private Vector2Int lastAttackPreviewDir = Vector2Int.zero;
@@ -54,6 +57,9 @@ public class PlayerInputController : MonoBehaviour
     // ── 이동 가능 타일 하이라이트 공개 API ───────────────────────────────
     public void RefreshMoveHighlight()
     {
+        // 공격 미리보기 항상 초기화 (턴 전환·행동 완료 후 잔상 방지)
+        ClearAttackPreview();
+        lastAttackPreviewDir = Vector2Int.zero;
         ClearMoveHighlight();
         if (player == null || player.HasActedThisTurn) return;
         if (GameManager.Instance?.CurrentState != GameManager.GameState.PlayerTurn) return;
@@ -128,6 +134,10 @@ public class PlayerInputController : MonoBehaviour
     {
         var kb = Keyboard.current;
         if (kb == null || !kb.escapeKey.wasPressedThisFrame) return;
+
+        // 타이틀/갤러리/설정/스테이지선택 화면, 또는 씬 전환 중이면 처리 생략
+        if (GameManager.Instance.CurrentState == GameManager.GameState.Idle) return;
+        if (SpecialSceneController.Instance != null && SpecialSceneController.Instance.IsTransitioning) return;
 
         if (state == InputState.SkillPending)
         {
@@ -346,6 +356,11 @@ public class PlayerInputController : MonoBehaviour
         pendingSkillIndex = skillIndex;
         lastPreviewDir    = Vector2Int.zero;
         lastPreviewTarget = new Vector2Int(-999, -999);
+
+        // 텔레포트 스킬이면 이동 가능 범위 타일을 미리 파란색으로 표시
+        if (skill.PreviewType == SkillBase.SkillPreviewType.Teleport)
+            ShowTeleportRange(skill as Skill_Teleport);
+
         GameUI.Instance?.ShowNotify($"[{(skillIndex == 1 ? "Q" : "E")}] {skill.skillName} — 클릭 or 같은키 확정 / 다른키 취소", 3f);
     }
 
@@ -415,9 +430,19 @@ public class PlayerInputController : MonoBehaviour
     {
         Vector2Int target = GetMouseGridPos();
         if (target == lastPreviewTarget) return;
-        lastPreviewTarget = target;
 
-        ClearSkillPreview();
+        // 이전 호버 타일 복원 (범위 타일이면 파란색, 아니면 None)
+        if (lastPreviewTarget.x != -999)
+        {
+            var prevTile = BoardManager.Instance.GetTile(lastPreviewTarget);
+            if (prevTile != null)
+            {
+                prevTile.SetHighlight(teleportRangeTiles.Contains(lastPreviewTarget)
+                    ? Tile.HighlightType.Move
+                    : Tile.HighlightType.None);
+            }
+        }
+        lastPreviewTarget = target;
 
         var tile = BoardManager.Instance.GetTile(target);
         if (tile == null) return;
@@ -426,8 +451,38 @@ public class PlayerInputController : MonoBehaviour
         int dist = Mathf.Abs(target.x - player.GridPos.x) + Mathf.Abs(target.y - player.GridPos.y);
         bool valid = !tile.IsOccupied && tp != null && dist > 0 && dist <= tp.teleportRange;
 
+        // 호버 강조: 유효 타일이면 Selected(노란), 무효면 Attack(빨간)
         tile.SetHighlight(valid ? Tile.HighlightType.Selected : Tile.HighlightType.Attack);
-        previewTiles.Add(target);
+    }
+
+    // ── 텔레포트 범위 파란색 표시 ────────────────────────────────────────
+    private void ShowTeleportRange(Skill_Teleport tp)
+    {
+        ClearTeleportRange();
+        if (tp == null) return;
+
+        for (int x = -tp.teleportRange; x <= tp.teleportRange; x++)
+        {
+            for (int y = -tp.teleportRange; y <= tp.teleportRange; y++)
+            {
+                int dist = Mathf.Abs(x) + Mathf.Abs(y);
+                if (dist == 0 || dist > tp.teleportRange) continue;
+
+                Vector2Int pos  = player.GridPos + new Vector2Int(x, y);
+                var tile = BoardManager.Instance.GetTile(pos);
+                if (tile == null || tile.IsOccupied) continue;
+
+                tile.SetHighlight(Tile.HighlightType.Move);
+                teleportRangeTiles.Add(pos);
+            }
+        }
+    }
+
+    private void ClearTeleportRange()
+    {
+        foreach (var pos in teleportRangeTiles)
+            BoardManager.Instance.GetTile(pos)?.SetHighlight(Tile.HighlightType.None);
+        teleportRangeTiles.Clear();
     }
 
     // ── 확정 / 취소 ───────────────────────────────────────────────────────
@@ -499,6 +554,16 @@ public class PlayerInputController : MonoBehaviour
         foreach (var pos in previewTiles)
             BoardManager.Instance.GetTile(pos)?.SetHighlight(Tile.HighlightType.None);
         previewTiles.Clear();
+
+        // 텔레포트 범위 타일도 함께 초기화
+        ClearTeleportRange();
+
+        // 현재 호버 강조도 초기화
+        if (lastPreviewTarget.x != -999)
+        {
+            BoardManager.Instance.GetTile(lastPreviewTarget)?.SetHighlight(Tile.HighlightType.None);
+        }
+
         lastPreviewDir    = Vector2Int.zero;
         lastPreviewTarget = new Vector2Int(-999, -999);
     }

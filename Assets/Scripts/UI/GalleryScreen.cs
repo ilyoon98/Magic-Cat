@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// 갤러리 화면 — 스테이지 선택 → 해당 스테이지 이미지 목록
@@ -22,11 +23,11 @@ public class GalleryScreen : MonoBehaviour
 
     // ── 데이터 정의 ──────────────────────────────────────────────────────
     private static readonly string[] StageNames  = { "원소마법사", "흑백마법사", "비전마법사" };
-    private static readonly string[] KillerKeys  = { "Slime", "BigSlime" };
-    private static readonly string[] KillerNames = { "슬라임 패배", "빅슬라임 패배" };
+    private static readonly string[] KillerKeys  = { "Slime", "BigSlime", "Trap" };
+    private static readonly string[] KillerNames = { "슬라임 패배", "빅슬라임 패배", "기타 패배" };
 
-    // 행 1: 초상화 HP3·2·1·0 / 행 2: 배경·클리어·적패배×2
-    private const int COLS = 4;
+    // 행 1: 초상화 HP3·2·1·0·(빈칸) / 행 2: 배경·클리어·적패배×3
+    private const int COLS = 5;
     private const int ROWS = 2;
 
     // ── UI 참조 ───────────────────────────────────────────────────────────
@@ -44,10 +45,44 @@ public class GalleryScreen : MonoBehaviour
     private GameObject fullViewPanel;
     private Image      fullViewImage;
 
+    // 잠금 셀 클릭 시 토스트 알림
+    private Text  toastText;
+    private float toastTimer;
+
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
+    }
+
+    private void Update()
+    {
+        // 토스트 타이머
+        if (toastTimer > 0f)
+        {
+            toastTimer -= Time.deltaTime;
+            if (toastTimer <= 0f && toastText != null)
+                toastText.text = "";
+        }
+
+        if (Keyboard.current == null) return;
+        if (!Keyboard.current.escapeKey.wasPressedThisFrame) return;
+
+        // 우선순위: 전체화면 감상 → 상세 → 스테이지 선택 → 타이틀
+        if (fullViewPanel != null && fullViewPanel.activeSelf)
+        {
+            fullViewPanel.SetActive(false);
+        }
+        else if (detailPanel != null && detailPanel.activeSelf)
+        {
+            detailPanel.SetActive(false);
+            stageSelectPanel.SetActive(true);
+        }
+        else if (stageSelectPanel != null && stageSelectPanel.activeSelf)
+        {
+            Hide();
+            TitleScreen.Instance?.Show();
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -164,22 +199,22 @@ public class GalleryScreen : MonoBehaviour
         }
 
         // 열 레이블 행1 (HP)
-        string[] hpLabels   = { "HP 3 (풀피)", "HP 2", "HP 1", "HP 0" };
-        string[] otherLabels = { "배경", "클리어", "슬라임 패배", "빅슬라임 패배" };
-        float[]  colX        = { -430f, -145f, 145f, 430f };
+        string[] hpLabels    = { "HP 3 (풀피)", "HP 2", "HP 1", "HP 0", "" };
+        string[] otherLabels = { "배경", "클리어", "슬라임 패배", "빅슬라임 패배", "기타 패배" };
+        float[]  colX        = { -510f, -255f, 0f, 255f, 510f };
 
         for (int c = 0; c < COLS; c++)
         {
             // 행1 헤더
             MakeText(detailPanel.transform, $"HpHdr{c}",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(colX[c], 275f), new Vector2(240f, 28f),
+                new Vector2(colX[c], 275f), new Vector2(220f, 28f),
                 hpLabels[c], 16, new Color(1f, 0.5f, 0.55f), TextAnchor.MiddleCenter);
 
             // 행2 헤더
             MakeText(detailPanel.transform, $"OtherHdr{c}",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(colX[c], 70f), new Vector2(240f, 28f),
+                new Vector2(colX[c], 70f), new Vector2(220f, 28f),
                 otherLabels[c], 16, new Color(0.7f, 0.85f, 0.7f), TextAnchor.MiddleCenter);
         }
 
@@ -198,6 +233,12 @@ public class GalleryScreen : MonoBehaviour
             detailPanel.SetActive(false);
             stageSelectPanel.SetActive(true);
         });
+
+        // 잠금 클릭 토스트 (상세 패널 상단)
+        toastText = MakeText(detailPanel.transform, "ToastText",
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0, -130), new Vector2(600, 44),
+            "", 22, new Color(1f, 0.85f, 0.4f), TextAnchor.MiddleCenter);
     }
 
     private void BuildCell(Transform parent, int row, int col, float xPos, float yPos)
@@ -286,12 +327,15 @@ public class GalleryScreen : MonoBehaviour
         RefreshDetail();
     }
 
-    /// <summary>갤러리 상태 전체 갱신 (PortraitPanel 등 외부에서 호출)</summary>
+    /// <summary>갤러리 상태 전체 갱신 (PortraitPanel·CheatPanel 등 외부에서 호출)</summary>
     public void RefreshAll()
     {
         if (currentStage > 0 && detailPanel.activeSelf)
             RefreshDetail();
     }
+
+    /// <summary>CheatPanel 토글 시 즉시 반영용 (RefreshAll 별칭)</summary>
+    public void RefreshImageBlocker() => RefreshAll();
 
     private void RefreshDetail()
     {
@@ -319,8 +363,8 @@ public class GalleryScreen : MonoBehaviour
             SetCell(1, 1, unlocked,
                 unlocked ? LoadSprite($"Stage/StageClear_{s}") : null);
         }
-        // Row 1 col 2·3: 몬스터별 패배
-        for (int k = 0; k < KillerKeys.Length && k < 2; k++)
+        // Row 1 col 2·3·4: 몬스터/기타 패배
+        for (int k = 0; k < KillerKeys.Length && k < 3; k++)
         {
             bool unlocked = ProgressManager.IsDefeatUnlocked(s, KillerKeys[k]);
             SetCell(1, 2 + k, unlocked,
@@ -331,19 +375,30 @@ public class GalleryScreen : MonoBehaviour
     private void SetCell(int row, int col, bool unlocked, Sprite sprite)
     {
         lockIcons[row, col].SetActive(!unlocked);
-        if (unlocked && sprite != null)
+
+        bool showImages = CheatManager.Instance != null && CheatManager.Instance.ShowSensitiveImages;
+
+        if (!unlocked)
         {
-            cellImgs[row, col].sprite = sprite;
-            cellImgs[row, col].color  = Color.white;
-        }
-        else if (!unlocked)
-        {
+            // 잠금: 이미지 숨김
             cellImgs[row, col].sprite = null;
             cellImgs[row, col].color  = Color.clear;
         }
+        else if (!showImages)
+        {
+            // 해금됐지만 이미지 보기 OFF: 셀 배경만 표시 (이미지는 투명 처리)
+            cellImgs[row, col].sprite = null;
+            cellImgs[row, col].color  = Color.clear;
+        }
+        else if (sprite != null)
+        {
+            // 해금 + 이미지 보기 ON + 이미지 있음
+            cellImgs[row, col].sprite = sprite;
+            cellImgs[row, col].color  = Color.white;
+        }
         else
         {
-            // 해금됐지만 이미지 파일 없음 — 회색 표시
+            // 해금 + 이미지 보기 ON + 이미지 파일 없음
             cellImgs[row, col].sprite = null;
             cellImgs[row, col].color  = new Color(0.2f, 0.25f, 0.4f);
         }
@@ -351,10 +406,28 @@ public class GalleryScreen : MonoBehaviour
 
     private void OnCellClick(int row, int col)
     {
+        // 잠금 상태
+        if (lockIcons[row, col] != null && lockIcons[row, col].activeSelf)
+        {
+            ShowToast("🔒 아직 열리지 않은 이미지입니다");
+            return;
+        }
+
         var img = cellImgs[row, col];
-        if (img.sprite == null) return;
+        if (img.sprite == null)
+        {
+            ShowToast("이미지 파일을 찾을 수 없습니다");
+            return;
+        }
         fullViewImage.sprite = img.sprite;
         fullViewPanel.SetActive(true);
+    }
+
+    private void ShowToast(string msg, float duration = 2f)
+    {
+        if (toastText == null) return;
+        toastText.text = msg;
+        toastTimer = duration;
     }
 
     // ── 헬퍼 ─────────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 /// <summary>
 /// 스테이지 선택 화면 — 타이틀에서 게임 시작 시 표시
@@ -30,11 +31,22 @@ public class StageSelectScreen : MonoBehaviour
     private Button[]     startBtns    = new Button[3];
     private GameObject[] lockOverlays = new GameObject[3]; // 잠긴 카드 어두운 오버레이
     private Image[]      stageImgs    = new Image[3];      // 스테이지 배경 이미지
+    private Text[]       mapsClearTxts = new Text[3];      // 맵별 클리어 현황 텍스트
 
     private void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
+    }
+
+    private void Update()
+    {
+        if (!panel.activeSelf) return;
+        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            Hide();
+            TitleScreen.Instance?.Show();
+        }
     }
 
     public void Build(Transform canvasRoot)
@@ -139,12 +151,14 @@ public class StageSelectScreen : MonoBehaviour
             new Vector2(0, 102), new Vector2(200, 34),
             "♥ ♥ ♥", 22, new Color(1f, 0.38f, 0.48f), TextAnchor.MiddleCenter);
 
-        // ── 맵 구성 표시 ──────────────────────────────────────────────────
-        MakeText(card.transform, "Maps",
+        // ── 맵 구성 + 클리어 표시 (동적 갱신용 참조 보관) ─────────────────
+        var mapsText = MakeText(card.transform, "Maps",
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-            new Vector2(0, 68), new Vector2(290, 32),
-            "MAP 1  ·  MAP 2  ·  BOSS", 20,
+            new Vector2(0, 68), new Vector2(310, 32),
+            GetMapsLabel(stage), 20,
             new Color(0.50f, 0.62f, 0.72f), TextAnchor.MiddleCenter);
+        mapsText.supportRichText = true;
+        mapsClearTxts[stage - 1] = mapsText;
 
         // ── 시작 버튼 ─────────────────────────────────────────────────────
         var startBtn = MakeButton(card.transform, "StartBtn",
@@ -159,17 +173,26 @@ public class StageSelectScreen : MonoBehaviour
         lockGo.transform.SetParent(card.transform, false);
         var lrt2 = lockGo.AddComponent<RectTransform>();
         lrt2.anchorMin = Vector2.zero; lrt2.anchorMax = Vector2.one; lrt2.sizeDelta = Vector2.zero;
-        lockGo.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
-        // 자물쇠 아이콘 + 텍스트
-        MakeText(lockGo.transform, "LockText",
+        lockGo.AddComponent<Image>().color = new Color(0f, 0f, 0.05f, 0.82f);
+
+        // 잠금 배지 카드 (가운데)
+        var badge = new GameObject("LockBadge");
+        badge.transform.SetParent(lockGo.transform, false);
+        var badgeRt = badge.AddComponent<RectTransform>();
+        badgeRt.anchorMin = badgeRt.anchorMax = new Vector2(0.5f, 0.5f);
+        badgeRt.anchoredPosition = Vector2.zero;
+        badgeRt.sizeDelta = new Vector2(270, 140);
+        badge.AddComponent<Image>().color = new Color(0.05f, 0.05f, 0.12f, 0.95f);
+
+        MakeText(badge.transform, "LockText",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, 10), new Vector2(300, 120),
-            "🔒", 64, new Color(0.7f, 0.7f, 0.8f), TextAnchor.MiddleCenter);
-        MakeText(lockGo.transform, "LockSub",
+            new Vector2(0, 28), new Vector2(250, 64),
+            "🔒", 48, new Color(0.85f, 0.85f, 1f), TextAnchor.MiddleCenter);
+        MakeText(badge.transform, "LockSub",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, -55), new Vector2(280, 56),
-            "이전 스테이지 보스를\n클리어하면 해금됩니다", 20,
-            new Color(0.6f, 0.6f, 0.65f), TextAnchor.MiddleCenter);
+            new Vector2(0, -28), new Vector2(250, 52),
+            "이전 보스 클리어 시 해금", 17,
+            new Color(0.65f, 0.65f, 0.75f), TextAnchor.MiddleCenter);
         lockOverlays[stage - 1] = lockGo;
     }
 
@@ -186,15 +209,31 @@ public class StageSelectScreen : MonoBehaviour
     {
         for (int i = 0; i < 3; i++)
         {
-            bool unlocked = ProgressManager.IsStageUnlocked(i + 1);
+            int  stage    = i + 1;
+            bool unlocked = ProgressManager.IsStageUnlocked(stage);
+
             if (startBtns[i]    != null) startBtns[i].interactable    = unlocked;
             if (lockOverlays[i] != null) lockOverlays[i].SetActive(!unlocked);
+
             // 해금된 경우 이미지를 더 선명하게, 잠긴 경우 투명하게
             if (stageImgs[i] != null && stageImgs[i].sprite != null)
                 stageImgs[i].color = unlocked
                     ? new Color(1f, 1f, 1f, 0.28f)
                     : new Color(1f, 1f, 1f, 0.06f);
+
+            // 맵별 클리어 표시 갱신
+            if (mapsClearTxts[i] != null)
+                mapsClearTxts[i].text = GetMapsLabel(stage);
         }
+    }
+
+    /// <summary>맵 클리어 상태를 반영한 표시 문자열 생성</summary>
+    private static string GetMapsLabel(int stage)
+    {
+        string m1   = ProgressManager.IsMapCleared(stage, 1) ? "<color=#66ff99>MAP 1 ✓</color>" : "MAP 1";
+        string m2   = ProgressManager.IsMapCleared(stage, 2) ? "<color=#66ff99>MAP 2 ✓</color>" : "MAP 2";
+        string boss = ProgressManager.IsMapCleared(stage, 3) ? "<color=#ffdd55>BOSS ✓</color>"  : "BOSS";
+        return $"{m1}  ·  {m2}  ·  {boss}";
     }
 
     private void StartFromStage(int stage)

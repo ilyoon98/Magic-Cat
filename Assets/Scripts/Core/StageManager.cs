@@ -34,11 +34,14 @@ public class StageManager : MonoBehaviour
     // ── 현재 맵 적 스폰 ───────────────────────────────────────────────────
     public void SpawnCurrentMap()
     {
+        FloorObjectManager.Instance?.ClearAll();
         EnemyManager.Instance.Reset();
 
         var spawnList = GetSpawnList(CurrentStage, CurrentMap);
         foreach (var (dataIndex, pos) in spawnList)
             SpawnEnemy(EnemyDataTable.Get(dataIndex), pos);
+
+        SpawnFloorObjects(CurrentStage, CurrentMap);
 
         // 배경 이미지 적용
         BoardBackground.Instance?.SetStage(CurrentStage);
@@ -74,6 +77,10 @@ public class StageManager : MonoBehaviour
     {
         // 즉시 입력 차단 (클리어 후 플레이어가 계속 행동하는 버그 방지)
         GameManager.Instance?.ChangeState(GameManager.GameState.MapClear);
+
+        // 모든 맵(일반/보스) 클리어 기록 저장
+        ProgressManager.UnlockMapClear(CurrentStage, CurrentMap);
+
         yield return new UnityEngine.WaitForSeconds(0.4f);
 
         bool isBoss = IsBossMap;
@@ -246,6 +253,78 @@ public class StageManager : MonoBehaviour
             },
 
             _ => new List<(int, Vector2Int)> { (1, new Vector2Int(4, 4)) }
+        };
+    }
+
+    // ── 바닥 오브젝트 스폰 ───────────────────────────────────────────────
+    private void SpawnFloorObjects(int stage, int map)
+    {
+        if (FloorObjectManager.Instance == null) return;
+        var floorData = GetFloorObjectList(stage, map);
+        foreach (var (type, pos) in floorData)
+            FloorObjectManager.Instance.Spawn(type, pos);
+    }
+
+    private List<(FloorObject.ObjectType, Vector2Int)> GetFloorObjectList(int stage, int map)
+    {
+        var H = FloorObject.ObjectType.Heart;
+        var T = FloorObject.ObjectType.Trap;
+
+        return (stage, map) switch
+        {
+            (1, 1) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(4, 0)), (T, new Vector2Int(7, 5)),
+                (H, new Vector2Int(2, 5)),
+            },
+            (1, 2) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(3, 2)), (T, new Vector2Int(5, 6)),
+                (H, new Vector2Int(6, 4)),
+            },
+            (1, 3) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(2, 2)), (T, new Vector2Int(6, 6)),
+                (T, new Vector2Int(2, 6)), (T, new Vector2Int(6, 2)),
+                (H, new Vector2Int(4, 6)),
+            },
+            (2, 1) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(2, 1)), (T, new Vector2Int(6, 7)),
+                (H, new Vector2Int(4, 3)),
+            },
+            (2, 2) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(1, 5)), (T, new Vector2Int(7, 1)),
+                (T, new Vector2Int(5, 7)),
+                (H, new Vector2Int(3, 5)),
+            },
+            (2, 3) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(1, 1)), (T, new Vector2Int(7, 7)),
+                (T, new Vector2Int(1, 7)), (T, new Vector2Int(7, 1)),
+                (H, new Vector2Int(6, 5)),
+            },
+            (3, 1) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(2, 0)), (T, new Vector2Int(6, 4)),
+                (T, new Vector2Int(0, 6)),
+                (H, new Vector2Int(4, 2)),
+            },
+            (3, 2) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(1, 3)), (T, new Vector2Int(7, 3)),
+                (T, new Vector2Int(4, 1)), (T, new Vector2Int(4, 7)),
+                (H, new Vector2Int(1, 1)), (H, new Vector2Int(7, 7)),
+            },
+            (3, 3) => new List<(FloorObject.ObjectType, Vector2Int)>
+            {
+                (T, new Vector2Int(0, 0)), (T, new Vector2Int(7, 0)),
+                (T, new Vector2Int(0, 7)), (T, new Vector2Int(7, 7)),
+                (T, new Vector2Int(3, 3)), (T, new Vector2Int(5, 3)),
+                (H, new Vector2Int(3, 7)), (H, new Vector2Int(5, 7)),
+            },
+            _ => new List<(FloorObject.ObjectType, Vector2Int)>()
         };
     }
 

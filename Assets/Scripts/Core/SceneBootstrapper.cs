@@ -58,6 +58,7 @@ public class SceneBootstrapper : MonoBehaviour
         new GameObject("CheatManager").AddComponent<CheatManager>();
         new GameObject("AudioManager").AddComponent<AudioManager>();
         new GameObject("BoardBackground").AddComponent<BoardBackground>();
+        new GameObject("FloorObjectManager").AddComponent<FloorObjectManager>();
     }
 
     // ── 2. 보드 ───────────────────────────────────────────────────────────
@@ -125,11 +126,11 @@ public class SceneBootstrapper : MonoBehaviour
         // 갤러리 화면
         canvasGo.AddComponent<GalleryScreen>().Build(canvas.transform);
 
-        // 설정 패널
-        canvasGo.AddComponent<SettingsPanel>().Build(canvas.transform);
-
         // 타이틀 화면
         canvasGo.AddComponent<TitleScreen>().Build(canvas);
+
+        // 설정 패널 — TitleScreen보다 나중에 추가해야 위에 렌더링됨
+        canvasGo.AddComponent<SettingsPanel>().Build(canvas.transform);
 
         // 특별씬 컨트롤러 (페이드 + 게임오버/클리어 이미지 + 풍경 패닝)
         // → 반드시 TitleScreen 다음에 빌드해야 캔버스 최상단에 렌더링됨

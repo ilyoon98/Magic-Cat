@@ -13,9 +13,11 @@ public class CheatPanel : MonoBehaviour
     private Button btnInvincible;
     private Button btnZeroCd;
     private Button btnTeleport;
+    private Button btnShowImg;
     private Text   lblInvincible;
     private Text   lblZeroCd;
     private Text   lblTeleport;
+    private Text   lblShowImg;
 
     private void Awake()
     {
@@ -40,26 +42,26 @@ public class CheatPanel : MonoBehaviour
         var rt = panel.AddComponent<RectTransform>();
         rt.anchorMin = new Vector2(1f, 1f);
         rt.anchorMax = new Vector2(1f, 1f);
-        rt.anchoredPosition = new Vector2(-110f, -310f); // 메뉴 버튼 아래
-        rt.sizeDelta = new Vector2(200f, 280f);          // 버튼 5개에 맞게 확장
+        rt.anchoredPosition = new Vector2(-110f, -360f); // 메뉴 버튼 아래
+        rt.sizeDelta = new Vector2(200f, 340f);          // 버튼 6개에 맞게 확장
 
         panel.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.85f);
 
         // ── 제목 ──────────────────────────────────────────────────────────
         MakeLabel(panel.transform, "CHEAT [F1]",
-            new Vector2(0f, 0.88f), new Vector2(1f, 1f), 15);
+            new Vector2(0f, 0.91f), new Vector2(1f, 1f), 15);
 
-        // ── 토글 버튼 3개 (치트) ──────────────────────────────────────────
+        // ── 토글 버튼 4개 ─────────────────────────────────────────────────
         (btnInvincible, lblInvincible) = MakeToggleButton(panel.transform,
-            "무적", new Vector2(0f, 0.70f), new Vector2(1f, 0.87f),
+            "무적", new Vector2(0f, 0.74f), new Vector2(1f, 0.90f),
             () => { CheatManager.Instance?.ToggleInvincible(); RefreshButtonColors(); });
 
         (btnZeroCd, lblZeroCd) = MakeToggleButton(panel.transform,
-            "쿨타임 0", new Vector2(0f, 0.52f), new Vector2(1f, 0.69f),
+            "쿨타임 0", new Vector2(0f, 0.57f), new Vector2(1f, 0.73f),
             () => { CheatManager.Instance?.ToggleZeroCooldown(); RefreshButtonColors(); });
 
         (btnTeleport, lblTeleport) = MakeToggleButton(panel.transform,
-            "순간이동", new Vector2(0f, 0.34f), new Vector2(1f, 0.51f),
+            "순간이동", new Vector2(0f, 0.40f), new Vector2(1f, 0.56f),
             () =>
             {
                 CheatManager.Instance?.ToggleTeleportMode();
@@ -68,16 +70,31 @@ public class CheatPanel : MonoBehaviour
                     GameUI.Instance?.ShowNotify("순간이동 ON — 빈 칸 클릭", 1.5f);
             });
 
+        // 이미지 보기 토글 (기본 OFF = 민감 이미지 가림)
+        (btnShowImg, lblShowImg) = MakeToggleButton(panel.transform,
+            "이미지 보기", new Vector2(0f, 0.23f), new Vector2(1f, 0.39f),
+            () =>
+            {
+                CheatManager.Instance?.ToggleShowImages();
+                RefreshButtonColors();
+                // 갤러리 차단 패널 즉시 갱신
+                GalleryScreen.Instance?.RefreshImageBlocker();
+                GalleryScreen.Instance?.RefreshAll();
+                // 인게임 대형 초상화 즉시 갱신
+                var player = TurnManager.Instance?.GetPlayer();
+                if (player != null) PortraitPanel.Instance?.Refresh(player);
+            });
+
         // ── 구분선 ────────────────────────────────────────────────────────
         var div = new GameObject("Div"); div.transform.SetParent(panel.transform, false);
         var drt = div.AddComponent<RectTransform>();
-        drt.anchorMin = new Vector2(0.05f, 0.325f); drt.anchorMax = new Vector2(0.95f, 0.33f);
+        drt.anchorMin = new Vector2(0.05f, 0.215f); drt.anchorMax = new Vector2(0.95f, 0.22f);
         drt.sizeDelta = Vector2.zero;
         div.AddComponent<Image>().color = new Color(0.35f, 0.45f, 0.65f, 0.6f);
 
         // ── 스테이지 잠금해제 버튼 ────────────────────────────────────────
         MakeActionButton(panel.transform, "스테이지 잠금해제",
-            new Vector2(0f, 0.17f), new Vector2(1f, 0.32f),
+            new Vector2(0f, 0.11f), new Vector2(1f, 0.21f),
             new Color(0.2f, 0.5f, 0.2f, 0.9f),
             () =>
             {
@@ -87,7 +104,7 @@ public class CheatPanel : MonoBehaviour
 
         // ── 스테이지 초기화 버튼 ──────────────────────────────────────────
         MakeActionButton(panel.transform, "스테이지 초기화",
-            new Vector2(0f, 0.01f), new Vector2(1f, 0.16f),
+            new Vector2(0f, 0.01f), new Vector2(1f, 0.10f),
             new Color(0.55f, 0.18f, 0.18f, 0.9f),
             () =>
             {
@@ -103,9 +120,10 @@ public class CheatPanel : MonoBehaviour
     private void RefreshButtonColors()
     {
         if (CheatManager.Instance == null) return;
-        SetButtonState(btnInvincible, lblInvincible, "무적",     CheatManager.Instance.Invincible);
-        SetButtonState(btnZeroCd,     lblZeroCd,     "쿨타임 0", CheatManager.Instance.ZeroCooldown);
-        SetButtonState(btnTeleport,   lblTeleport,   "순간이동", CheatManager.Instance.TeleportMode);
+        SetButtonState(btnInvincible, lblInvincible, "무적",       CheatManager.Instance.Invincible);
+        SetButtonState(btnZeroCd,     lblZeroCd,     "쿨타임 0",  CheatManager.Instance.ZeroCooldown);
+        SetButtonState(btnTeleport,   lblTeleport,   "순간이동",  CheatManager.Instance.TeleportMode);
+        SetButtonState(btnShowImg,    lblShowImg,    "이미지 보기", CheatManager.Instance.ShowSensitiveImages);
     }
 
     private void SetButtonState(Button btn, Text lbl, string label, bool on)

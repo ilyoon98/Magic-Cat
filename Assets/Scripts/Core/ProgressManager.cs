@@ -43,6 +43,26 @@ public static class ProgressManager
         Debug.Log($"[Gallery] Stage{stage}_HP{hp} 이미지 해금!");
     }
 
+    // ── 맵별 클리어 ───────────────────────────────────────────────────────
+    /// <summary>
+    /// map=1,2 → 일반 맵. map=3 → 보스(=IsClearUnlocked 재사용).
+    /// </summary>
+    public static bool IsMapCleared(int stage, int map)
+    {
+        if (map >= 3) return IsClearUnlocked(stage);
+        return PlayerPrefs.GetInt($"MapClear_S{stage}_M{map}", 0) == 1;
+    }
+
+    public static void UnlockMapClear(int stage, int map)
+    {
+        if (map >= 3) { UnlockClear(stage); return; } // 보스는 IsClearUnlocked로 통합
+        string key = $"MapClear_S{stage}_M{map}";
+        if (PlayerPrefs.GetInt(key, 0) == 1) return;
+        PlayerPrefs.SetInt(key, 1);
+        PlayerPrefs.Save();
+        Debug.Log($"[Progress] Stage{stage} Map{map} 클리어 기록!");
+    }
+
     // ── 치트 / 디버그 ─────────────────────────────────────────────────────
     public static void UnlockAll()
     {
@@ -50,10 +70,12 @@ public static class ProgressManager
         for (int s = 1; s <= 3; s++)
         {
             for (int h = 0; h <= 2; h++) UnlockGallery(s, h);
+            for (int m = 1; m <= 3; m++) UnlockMapClear(s, m);
             UnlockClear(s);
             UnlockBackground(s);
             UnlockDefeat(s, "Slime");
             UnlockDefeat(s, "BigSlime");
+            UnlockDefeat(s, "Trap");
         }
         Debug.Log("[Progress] 전체 해금 완료");
     }

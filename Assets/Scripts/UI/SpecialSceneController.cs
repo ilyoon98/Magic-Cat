@@ -19,6 +19,9 @@ public class SpecialSceneController : MonoBehaviour
 {
     public static SpecialSceneController Instance { get; private set; }
 
+    /// <summary>씬 전환 중이면 true — ESC 등 다른 입력 차단용</summary>
+    public bool IsTransitioning { get; private set; }
+
     // ── UI 요소 ───────────────────────────────────────────────────────────
     private Image  fadeOverlay;       // 전체화면 검정 페이드용
 
@@ -29,6 +32,10 @@ public class SpecialSceneController : MonoBehaviour
     private GameObject landscapeRoot; // 풍경 씬 루트
     private Image      landscapeImg;
     private RectTransform landscapeRt;
+
+    // 클리어 연출 오버레이
+    private GameObject clearEffectRoot;
+    private Text       clearEffectText;
 
     private void Awake()
     {
@@ -74,7 +81,28 @@ public class SpecialSceneController : MonoBehaviour
 
         landscapeRoot.SetActive(false);
 
-        // ── ③ 페이드 오버레이 (가장 마지막 = 최상단) ───────────────────────
+        // ── ③ 클리어 연출 오버레이 ───────────────────────────────────────
+        clearEffectRoot = new GameObject("ClearEffect");
+        clearEffectRoot.transform.SetParent(canvasRoot, false);
+        var cert = clearEffectRoot.AddComponent<RectTransform>();
+        cert.anchorMin = Vector2.zero; cert.anchorMax = Vector2.one; cert.sizeDelta = Vector2.zero;
+        clearEffectRoot.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.65f);
+
+        var ceTxtGo = new GameObject("ClearText");
+        ceTxtGo.transform.SetParent(clearEffectRoot.transform, false);
+        var cetrt = ceTxtGo.AddComponent<RectTransform>();
+        cetrt.anchorMin = cetrt.anchorMax = new Vector2(0.5f, 0.5f);
+        cetrt.anchoredPosition = Vector2.zero;
+        cetrt.sizeDelta = new Vector2(900f, 160f);
+        clearEffectText = ceTxtGo.AddComponent<Text>();
+        clearEffectText.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        clearEffectText.fontSize  = 88;
+        clearEffectText.fontStyle = FontStyle.Bold;
+        clearEffectText.alignment = TextAnchor.MiddleCenter;
+        clearEffectText.color     = new Color(1f, 0.92f, 0.2f);
+        clearEffectRoot.SetActive(false);
+
+        // ── ④ 페이드 오버레이 (가장 마지막 = 최상단) ───────────────────────
         var fadGo = new GameObject("FadeOverlay");
         fadGo.transform.SetParent(canvasRoot, false);
         var frt = fadGo.AddComponent<RectTransform>();
@@ -95,9 +123,45 @@ public class SpecialSceneController : MonoBehaviour
     /// <summary>스테이지 선택 후 인트로 연출 (풍경 패닝 → 게임 시작)</summary>
     public void ShowStageIntro(int stage)       => StartCoroutine(StageIntroSeq(stage));
 
+    // ── 클리어 연출 (보스 클리어 시 보드 위에서 먼저 재생) ────────────────
+    private IEnumerator PlayClearEffect(string text)
+    {
+        if (clearEffectText != null) clearEffectText.text = text;
+        if (clearEffectRoot != null) clearEffectRoot.SetActive(true);
+
+        // 텍스트 페이드인
+        var img  = clearEffectRoot?.GetComponent<Image>();
+        var txtC = clearEffectText;
+        float t  = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / 0.3f;
+            float a = Mathf.Clamp01(t);
+            if (img  != null) img.color  = new Color(0f, 0f, 0f, 0.65f * a);
+            if (txtC != null) txtC.color = new Color(1f, 0.92f, 0.2f, a);
+            yield return null;
+        }
+
+        yield return new WaitForSeconds(1.5f);
+
+        // 텍스트 페이드아웃
+        t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / 0.35f;
+            float a = 1f - Mathf.Clamp01(t);
+            if (img  != null) img.color  = new Color(0f, 0f, 0f, 0.65f * a);
+            if (txtC != null) txtC.color = new Color(1f, 0.92f, 0.2f, a);
+            yield return null;
+        }
+
+        if (clearEffectRoot != null) clearEffectRoot.SetActive(false);
+    }
+
     // ── 게임오버 ──────────────────────────────────────────────────────────
     private IEnumerator GameOverSeq(int stage, string killerName)
     {
+        IsTransitioning = true;
         yield return StartCoroutine(FadeToBlack(0.55f));
 
         // 우선순위: Stage+Killer → Stage → 공통  (Defeat/ 폴더)
@@ -112,11 +176,15 @@ public class SpecialSceneController : MonoBehaviour
 
         sceneRoot.SetActive(true);
         yield return StartCoroutine(FadeIn(0.5f));
+        IsTransitioning = false;
     }
 
     // ── 스테이지 클리어 ───────────────────────────────────────────────────
     private IEnumerator StageClearSeq(int stage)
     {
+        IsTransitioning = true;
+        // 보드 위에 클리어 텍스트 연출
+        yield return StartCoroutine(PlayClearEffect("STAGE  CLEAR !"));
         yield return StartCoroutine(FadeToBlack(0.55f));
 
         SetupScene(LoadImage("Stage", $"StageClear_{stage}"), new Color(0.08f, 0.06f, 0.01f));
@@ -128,11 +196,14 @@ public class SpecialSceneController : MonoBehaviour
 
         sceneRoot.SetActive(true);
         yield return StartCoroutine(FadeIn(0.5f));
+        IsTransitioning = false;
     }
 
     // ── 올 클리어 ─────────────────────────────────────────────────────────
     private IEnumerator AllClearSeq()
     {
+        IsTransitioning = true;
+        yield return StartCoroutine(PlayClearEffect("ALL  CLEAR !"));
         yield return StartCoroutine(FadeToBlack(0.55f));
 
         SetupScene(LoadImage("Stage", "AllClear"), new Color(0.05f, 0.02f, 0.12f));
@@ -143,11 +214,13 @@ public class SpecialSceneController : MonoBehaviour
 
         sceneRoot.SetActive(true);
         yield return StartCoroutine(FadeIn(0.5f));
+        IsTransitioning = false;
     }
 
     // ── 스테이지 인트로 (스테이지 선택 → 게임 시작) ──────────────────────
     private IEnumerator StageIntroSeq(int stage)
     {
+        IsTransitioning = true;
         // 보드가 보이지 않도록 즉시 검정 처리 (페이드 없이 바로)
         fadeOverlay.raycastTarget = true;
         fadeOverlay.color = new Color(0, 0, 0, 1f);
@@ -196,6 +269,7 @@ public class SpecialSceneController : MonoBehaviour
 
         yield return new WaitForSeconds(0.1f);
         yield return StartCoroutine(FadeIn(0.45f));
+        IsTransitioning = false;
     }
 
     // ── 풍경 패닝 씬 (좌→우) ─────────────────────────────────────────────

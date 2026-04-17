@@ -36,14 +36,16 @@ public abstract class Unit : MonoBehaviour
         {
             transform.position = targetPos;
             placed = true;
+            // 초기 배치 시에도 바닥 오브젝트 체크
+            FloorObjectManager.Instance?.OnUnitEnterTile(this, pos);
         }
         else
         {
-            StartCoroutine(SmoothMove(targetPos));
+            StartCoroutine(SmoothMoveAndCheck(targetPos, pos));
         }
     }
 
-    private IEnumerator SmoothMove(Vector3 target)
+    private IEnumerator SmoothMoveAndCheck(Vector3 target, Vector2Int gridPos)
     {
         float duration = 0.15f;
         Vector3 start = transform.position;
@@ -55,6 +57,8 @@ public abstract class Unit : MonoBehaviour
             yield return null;
         }
         transform.position = target;
+        // 이동 완료 후 바닥 오브젝트 발동
+        FloorObjectManager.Instance?.OnUnitEnterTile(this, gridPos);
     }
 
     public virtual void TakeDamage(int amount, bool isCritical = false)

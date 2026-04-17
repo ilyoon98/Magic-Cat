@@ -40,18 +40,18 @@ public class TitleScreen : MonoBehaviour
         // ── 서브타이틀 ────────────────────────────────────────────────────
         MakeText(panel.transform, "Subtitle",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0f, -90f), new Vector2(600f, 50f),
+            new Vector2(0f, -70f), new Vector2(600f, 44f),
             "3가지 마법으로 9개의 맵을 돌파하라",
             22, new Color(0.6f, 0.75f, 1f, 0.85f), TextAnchor.MiddleCenter);
 
         // ── 조작 안내 ─────────────────────────────────────────────────────
         MakeText(panel.transform, "Controls",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0f, -165f), new Vector2(640f, 90f),
+            new Vector2(0f, -148f), new Vector2(640f, 76f),
             "WASD / ↑↓←→  이동      마우스 클릭  공격\n" +
             "Q  스킬1      E  스킬2      Space  턴 넘기기\n" +
             "F1  치트 패널",
-            18, new Color(0.65f, 0.75f, 0.85f), TextAnchor.MiddleCenter);
+            17, new Color(0.65f, 0.75f, 0.85f), TextAnchor.MiddleCenter);
 
         // ── 게임 시작 버튼 ────────────────────────────────────────────────
         var btnGo = new GameObject("StartButton");
@@ -59,15 +59,15 @@ public class TitleScreen : MonoBehaviour
         var brt = btnGo.AddComponent<RectTransform>();
         brt.anchorMin = new Vector2(0.5f, 0.5f);
         brt.anchorMax = new Vector2(0.5f, 0.5f);
-        brt.anchoredPosition = new Vector2(0f, -270f);
-        brt.sizeDelta = new Vector2(300f, 68f);
+        brt.anchoredPosition = new Vector2(0f, -218f);
+        brt.sizeDelta = new Vector2(300f, 64f);
         var btnImg = btnGo.AddComponent<Image>();
         btnImg.color = new Color(0.2f, 0.5f, 0.95f);
         var btn = btnGo.AddComponent<Button>();
         btn.onClick.AddListener(OnStartClicked);
         MakeText(btnGo.transform, "StartLabel",
             Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
-            "게임 시작", 34, Color.white, TextAnchor.MiddleCenter);
+            "게임 시작", 32, Color.white, TextAnchor.MiddleCenter);
 
         // ── 갤러리 버튼 ───────────────────────────────────────────────────
         var galGo = new GameObject("GalleryButton");
@@ -75,15 +75,15 @@ public class TitleScreen : MonoBehaviour
         var grt = galGo.AddComponent<RectTransform>();
         grt.anchorMin = new Vector2(0.5f, 0.5f);
         grt.anchorMax = new Vector2(0.5f, 0.5f);
-        grt.anchoredPosition = new Vector2(0f, -360f);
-        grt.sizeDelta = new Vector2(300f, 56f);
+        grt.anchoredPosition = new Vector2(0f, -296f);
+        grt.sizeDelta = new Vector2(300f, 54f);
         var galImg = galGo.AddComponent<Image>();
         galImg.color = new Color(0.45f, 0.25f, 0.65f);
         var galBtn = galGo.AddComponent<Button>();
         galBtn.onClick.AddListener(() => { Hide(); GalleryScreen.Instance?.Show(); });
         MakeText(galGo.transform, "GalleryLabel",
             Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
-            "🖼 갤러리", 28, Color.white, TextAnchor.MiddleCenter);
+            "🖼 갤러리", 26, Color.white, TextAnchor.MiddleCenter);
 
         // ── 설정 버튼 ─────────────────────────────────────────────────────
         var settGo = new GameObject("SettingsButton");
@@ -91,15 +91,15 @@ public class TitleScreen : MonoBehaviour
         var srt = settGo.AddComponent<RectTransform>();
         srt.anchorMin = new Vector2(0.5f, 0.5f);
         srt.anchorMax = new Vector2(0.5f, 0.5f);
-        srt.anchoredPosition = new Vector2(0f, -436f);
-        srt.sizeDelta = new Vector2(300f, 56f);
+        srt.anchoredPosition = new Vector2(0f, -366f);
+        srt.sizeDelta = new Vector2(300f, 54f);
         var settImg = settGo.AddComponent<Image>();
         settImg.color = new Color(0.22f, 0.35f, 0.45f);
         var settBtn = settGo.AddComponent<Button>();
         settBtn.onClick.AddListener(() => SettingsPanel.Instance?.Show());
         MakeText(settGo.transform, "SettingsLabel",
             Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
-            "⚙ 설정", 28, Color.white, TextAnchor.MiddleCenter);
+            "⚙ 설정", 26, Color.white, TextAnchor.MiddleCenter);
 
         // ── 게임 종료 버튼 ────────────────────────────────────────────────
         var quitGo = new GameObject("QuitButton");
@@ -107,15 +107,15 @@ public class TitleScreen : MonoBehaviour
         var qrt = quitGo.AddComponent<RectTransform>();
         qrt.anchorMin = new Vector2(0.5f, 0.5f);
         qrt.anchorMax = new Vector2(0.5f, 0.5f);
-        qrt.anchoredPosition = new Vector2(0f, -508f);
-        qrt.sizeDelta = new Vector2(300f, 56f);
+        qrt.anchoredPosition = new Vector2(0f, -436f);
+        qrt.sizeDelta = new Vector2(300f, 54f);
         var quitImg = quitGo.AddComponent<Image>();
         quitImg.color = new Color(0.45f, 0.12f, 0.12f);
         var quitBtn = quitGo.AddComponent<Button>();
         quitBtn.onClick.AddListener(() => Application.Quit());
         MakeText(quitGo.transform, "QuitLabel",
             Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
-            "✕ 종료", 28, Color.white, TextAnchor.MiddleCenter);
+            "✕ 종료", 26, Color.white, TextAnchor.MiddleCenter);
 
         // ── 장식 — 이모지 고양이 ──────────────────────────────────────────
         MakeText(panel.transform, "CatLeft",

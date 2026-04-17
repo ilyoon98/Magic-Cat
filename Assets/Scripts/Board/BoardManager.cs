@@ -122,16 +122,12 @@ public class BoardManager : MonoBehaviour
 
     private void CenterCamera()
     {
-        float boardCX  = (width  - 1) * tileSize / 2f;
-        float boardCY  = (height - 1) * tileSize / 2f;
+        float boardCX   = (width  - 1) * tileSize / 2f;
+        float boardCY   = (height - 1) * tileSize / 2f;
         float orthoSize = Mathf.Max(width, height) * tileSize / 2f + 1f;
 
-        // 우측 초상화 UI 공간 확보 — 카메라를 오른쪽으로 오프셋하면
-        // 보드가 화면 왼쪽으로 이동하여 오른쪽 25% 영역이 비워짐
-        float halfW    = orthoSize * Camera.main.aspect;
-        float xOffset  = halfW * 0.22f; // 화면 너비의 11% 만큼 보드를 좌측으로
-
-        Camera.main.transform.position = new Vector3(boardCX + xOffset, boardCY, -10f);
+        // 보드를 화면 정중앙에 배치 (UI는 Screen Space Overlay로 독립 렌더링)
+        Camera.main.transform.position = new Vector3(boardCX, boardCY, -10f);
         Camera.main.orthographicSize   = orthoSize;
     }
 }

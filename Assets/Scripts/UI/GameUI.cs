@@ -42,22 +42,22 @@ public class GameUI : MonoBehaviour
 
     public void Build(Canvas canvas)
     {
-        // ━━━ 좌측: 캐릭터 정보 패널 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ━━━ 상단 바: 전체 너비. PortraitPanel이 좌측 42%를 채움 ━━━━━━━━━━
+        var topPanel = MakePanel(canvas.transform, "TopPanel",
+            new Vector2(0f, 1f), new Vector2(1f, 1f),
+            new Vector2(0f, -34f), new Vector2(0f, 68f),
+            new Color(0f, 0f, 0f, 0.62f));
+
+        // ━━━ 캐릭터 정보 패널 (사이드바 없음 — 상단 바 + 우측 초상화 + 좌하단 스킬 바) ━━━━━━━━━━
         var portraitPanelGo = new GameObject("PortraitPanel");
         portraitPanelGo.transform.SetParent(canvas.transform, false);
         var portraitPanel = portraitPanelGo.AddComponent<PortraitPanel>();
-        portraitPanel.Build(canvas.transform);
+        portraitPanel.Build(canvas.transform, topPanel.transform);
 
-        // ━━━ 상단: 턴 표시 (포트레이트 패널 너비 175px 이후부터) ━━━━━━━━━━
-        // anchorMin.x = 175/1920 ≈ 0.091 로 좌측 패널과 겹치지 않게
-        var topPanel = MakePanel(canvas.transform, "TopPanel",
-            new Vector2(0.091f, 1f), new Vector2(1f, 1f),
-            new Vector2(0f, -35f), new Vector2(0f, 64f),
-            new Color(0f, 0f, 0f, 0.60f));
-
+        // 턴 표시 (상단 바 우측 58%)
         turnText = MakeText(topPanel.transform, "TurnText",
-            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
-            "플레이어 턴", 30, Color.white, TextAnchor.MiddleCenter);
+            new Vector2(0.42f, 0f), new Vector2(1f, 1f), Vector2.zero, Vector2.zero,
+            "플레이어 턴", 28, Color.white, TextAnchor.MiddleCenter);
 
         // ━━━ 하단: 행동 현황 패널 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         var actionPanel = MakePanel(canvas.transform, "ActionPanel",
@@ -186,14 +186,18 @@ public class GameUI : MonoBehaviour
     private void GoTitle()
     {
         inGameMenuPanel.SetActive(false);
-        GameManager.Instance?.Resume(); // 상태 복원 후 타이틀로
+        // Resume() 대신 Idle로 전환 — PlayerTurn 상태로 복귀하면
+        // 타이틀 화면에서도 PlayerInputController가 입력을 처리하는 버그 발생
+        TurnManager.Instance?.Reset();
+        GameManager.Instance?.ChangeState(GameManager.GameState.Idle);
         TitleScreen.Instance?.Show();
     }
 
     private void GoStageSelect()
     {
         inGameMenuPanel.SetActive(false);
-        GameManager.Instance?.Resume();
+        TurnManager.Instance?.Reset();
+        GameManager.Instance?.ChangeState(GameManager.GameState.Idle);
         StageSelectScreen.Instance?.Show();
     }
 

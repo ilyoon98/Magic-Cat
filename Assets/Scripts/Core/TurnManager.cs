@@ -54,6 +54,8 @@ public class TurnManager : MonoBehaviour
         CurrentPhase = TurnPhase.PlayerTurn;
         isProcessing = false;
         player.StartTurn();
+        // 바닥 오브젝트 쿨다운 갱신 (함정 재활성화 포함)
+        FloorObjectManager.Instance?.OnTurnStart();
         GameUI.Instance?.Refresh();
         // 이동 가능 타일 하이라이트 갱신 (턴 시작 시 즉시 표시)
         player.GetComponent<PlayerInputController>()?.RefreshMoveHighlight();
@@ -101,6 +103,15 @@ public class TurnManager : MonoBehaviour
         if (!player.IsAlive)
         {
             GameManager.Instance.OnPlayerDead();
+            yield break;
+        }
+
+        // 맵 클리어·게임오버가 이미 발동됐으면 PlayerTurn으로 되돌리지 않음
+        var gs = GameManager.Instance.CurrentState;
+        if (gs == GameManager.GameState.MapClear ||
+            gs == GameManager.GameState.GameOver  ||
+            gs == GameManager.GameState.Idle)
+        {
             yield break;
         }
 
