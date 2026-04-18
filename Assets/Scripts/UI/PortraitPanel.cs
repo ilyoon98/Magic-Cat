@@ -238,10 +238,11 @@ public class PortraitPanel : MonoBehaviour
         var frame = new GameObject("BigPortraitFrame");
         frame.transform.SetParent(canvasRoot, false);
         var frt = frame.AddComponent<RectTransform>();
-        frt.anchorMin        = frt.anchorMax = new Vector2(1f, 0.5f);
+        frt.anchorMin        = new Vector2(1f, 0f);
+        frt.anchorMax        = new Vector2(1f, 1f);
         frt.pivot            = new Vector2(1f, 0.5f);
         frt.anchoredPosition = new Vector2(-8f, 0f);
-        frt.sizeDelta        = new Vector2(370f, 570f);
+        frt.sizeDelta        = new Vector2(460f, 0f);
         frame.AddComponent<Image>().color = new Color(0.04f, 0.05f, 0.08f, 0.85f);
 
         bigPortraitImage = new GameObject("BigPortraitImage").AddComponent<Image>();

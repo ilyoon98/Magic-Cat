@@ -189,7 +189,7 @@ public class GalleryScreen : MonoBehaviour
 
         // 행 레이블
         string[] rowLabels = { "캐릭터 초상화", "스테이지 · 패배" };
-        float[]  rowY      = { 160f, -50f };
+        float[]  rowY      = { 230f, -28f };
         for (int r = 0; r < ROWS; r++)
         {
             MakeText(detailPanel.transform, $"RowLabel{r}",
@@ -208,18 +208,18 @@ public class GalleryScreen : MonoBehaviour
             // 행1 헤더
             MakeText(detailPanel.transform, $"HpHdr{c}",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(colX[c], 275f), new Vector2(220f, 28f),
+                new Vector2(colX[c], 330f), new Vector2(220f, 28f),
                 hpLabels[c], 16, new Color(1f, 0.5f, 0.55f), TextAnchor.MiddleCenter);
 
             // 행2 헤더
             MakeText(detailPanel.transform, $"OtherHdr{c}",
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(colX[c], 70f), new Vector2(220f, 28f),
+                new Vector2(colX[c], 60f), new Vector2(220f, 28f),
                 otherLabels[c], 16, new Color(0.7f, 0.85f, 0.7f), TextAnchor.MiddleCenter);
         }
 
         // 셀 그리드 빌드
-        float[] cellY = { 180f, -30f };
+        float[] cellY = { 190f, -70f };
         for (int r = 0; r < ROWS; r++)
             for (int c = 0; c < COLS; c++)
                 BuildCell(detailPanel.transform, r, c, colX[c], cellY[r]);
@@ -248,7 +248,7 @@ public class GalleryScreen : MonoBehaviour
         var crt = cell.AddComponent<RectTransform>();
         crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
         crt.anchoredPosition = new Vector2(xPos, yPos);
-        crt.sizeDelta = new Vector2(230f, 160f);
+        crt.sizeDelta = new Vector2(160f, 230f);
         cell.AddComponent<Image>().color = new Color(0.1f, 0.12f, 0.20f);
 
         // 이미지 슬롯

@@ -37,11 +37,32 @@ public class StageManager : MonoBehaviour
         FloorObjectManager.Instance?.ClearAll();
         EnemyManager.Instance.Reset();
 
-        var spawnList = GetSpawnList(CurrentStage, CurrentMap);
-        foreach (var (dataIndex, pos) in spawnList)
-            SpawnEnemy(EnemyDataTable.Get(dataIndex), pos);
+        var enemyTypes = GetEnemyTypes(CurrentStage, CurrentMap);
+        var floorTypes = GetFloorObjectTypes(CurrentStage, CurrentMap);
 
-        SpawnFloorObjects(CurrentStage, CurrentMap);
+        // 플레이어 1 + 적 + 바닥 오브젝트 전부 겹치지 않게 랜덤 배치
+        var occupied = new HashSet<Vector2Int>();
+        var positions = PickRandomPositions(1 + enemyTypes.Count + floorTypes.Count, occupied);
+
+        // 플레이어 재배치
+        var player = TurnManager.Instance.GetPlayer();
+        if (player != null)
+        {
+            BoardManager.Instance.GetTile(player.GridPos)?.ClearUnit();
+            player.PlaceOnBoard(positions[0]);
+        }
+
+        // 적 스폰
+        for (int i = 0; i < enemyTypes.Count; i++)
+            SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), positions[1 + i]);
+
+        // 바닥 오브젝트 스폰
+        if (FloorObjectManager.Instance != null)
+        {
+            int offset = 1 + enemyTypes.Count;
+            for (int i = 0; i < floorTypes.Count; i++)
+                FloorObjectManager.Instance.Spawn(floorTypes[i], positions[offset + i]);
+        }
 
         // 배경 이미지 적용
         BoardBackground.Instance?.SetStage(CurrentStage);
@@ -55,6 +76,19 @@ public class StageManager : MonoBehaviour
         PortraitPanel.Instance?.SetStage(CurrentStage);
         PortraitPanel.Instance?.SetCharacterInfo(charName, portrait);
         GameUI.Instance?.Refresh();
+    }
+
+    // ── 랜덤 위치 생성 헬퍼 ──────────────────────────────────────────────
+    private static List<Vector2Int> PickRandomPositions(int count, HashSet<Vector2Int> occupied, int boardSize = 8)
+    {
+        var result = new List<Vector2Int>();
+        while (result.Count < count)
+        {
+            var pos = new Vector2Int(Random.Range(0, boardSize), Random.Range(0, boardSize));
+            if (occupied.Add(pos))
+                result.Add(pos);
+        }
+        return result;
     }
 
     // ── 특정 스테이지부터 초기화 (StageSelect에서 호출) ──────────────────
@@ -136,7 +170,6 @@ public class StageManager : MonoBehaviour
     private void SwitchPlayerForStage(int stage)
     {
         var oldPlayer = TurnManager.Instance.GetPlayer();
-        Vector2Int spawnPos = oldPlayer != null ? oldPlayer.GridPos : Vector2Int.zero;
 
         // 기존 플레이어 타일 해제 후 제거
         if (oldPlayer != null)
@@ -182,149 +215,44 @@ public class StageManager : MonoBehaviour
         go.AddComponent<PlayerInputController>().Init(newPlayer);
 
         TurnManager.Instance.SetPlayer(newPlayer);
-        newPlayer.PlaceOnBoard(spawnPos);
+        newPlayer.PlaceOnBoard(Vector2Int.zero); // SpawnCurrentMap()에서 즉시 랜덤 재배치됨
 
         Debug.Log($"[StageManager] 플레이어 교체 → {StageCharacters[stage - 1].name}");
     }
 
-    // ── 스폰 리스트 정의 ──────────────────────────────────────────────────
-    private List<(int, Vector2Int)> GetSpawnList(int stage, int map)
+    // ── 스테이지/맵별 적 종류 정의 (위치는 SpawnCurrentMap에서 랜덤 배정) ──
+    private static List<int> GetEnemyTypes(int stage, int map) => (stage, map) switch
     {
-        return (stage, map) switch
-        {
-            // ── Stage 1 ──────────────────────────────────────────────────
-            (1, 1) => new List<(int, Vector2Int)>
-            {
-                (1, new Vector2Int(4, 3)),
-                (1, new Vector2Int(6, 5)),
-            },
-            (1, 2) => new List<(int, Vector2Int)>
-            {
-                (1, new Vector2Int(3, 3)),
-                (1, new Vector2Int(5, 5)),
-                (1, new Vector2Int(7, 2)),
-            },
-            (1, 3) => new List<(int, Vector2Int)> // 보스
-            {
-                (2, new Vector2Int(4, 4)),
-            },
+        (1, 1) => new List<int> { 1, 1 },
+        (1, 2) => new List<int> { 1, 1, 1 },
+        (1, 3) => new List<int> { 2 },           // 보스
+        (2, 1) => new List<int> { 1, 1, 1 },
+        (2, 2) => new List<int> { 1, 1, 1, 1 },
+        (2, 3) => new List<int> { 2, 1 },         // 보스
+        (3, 1) => new List<int> { 1, 1, 1, 1 },
+        (3, 2) => new List<int> { 1, 1, 1, 1, 1 },
+        (3, 3) => new List<int> { 2, 1, 1 },      // 보스
+        _      => new List<int> { 1 }
+    };
 
-            // ── Stage 2 ──────────────────────────────────────────────────
-            (2, 1) => new List<(int, Vector2Int)>
-            {
-                (1, new Vector2Int(3, 4)),
-                (1, new Vector2Int(5, 3)),
-                (1, new Vector2Int(6, 6)),
-            },
-            (2, 2) => new List<(int, Vector2Int)>
-            {
-                (1, new Vector2Int(2, 2)),
-                (1, new Vector2Int(4, 6)),
-                (1, new Vector2Int(6, 3)),
-                (1, new Vector2Int(7, 7)),
-            },
-            (2, 3) => new List<(int, Vector2Int)>
-            {
-                (2, new Vector2Int(4, 4)),
-                (1, new Vector2Int(3, 3)),
-            },
-
-            // ── Stage 3 ──────────────────────────────────────────────────
-            (3, 1) => new List<(int, Vector2Int)>
-            {
-                (1, new Vector2Int(3, 3)),
-                (1, new Vector2Int(5, 5)),
-                (1, new Vector2Int(7, 1)),
-                (1, new Vector2Int(1, 7)),
-            },
-            (3, 2) => new List<(int, Vector2Int)>
-            {
-                (1, new Vector2Int(2, 2)),
-                (1, new Vector2Int(6, 2)),
-                (1, new Vector2Int(2, 6)),
-                (1, new Vector2Int(6, 6)),
-                (1, new Vector2Int(4, 4)),
-            },
-            (3, 3) => new List<(int, Vector2Int)>
-            {
-                (2, new Vector2Int(4, 4)),
-                (1, new Vector2Int(2, 4)),
-                (1, new Vector2Int(6, 4)),
-            },
-
-            _ => new List<(int, Vector2Int)> { (1, new Vector2Int(4, 4)) }
-        };
-    }
-
-    // ── 바닥 오브젝트 스폰 ───────────────────────────────────────────────
-    private void SpawnFloorObjects(int stage, int map)
-    {
-        if (FloorObjectManager.Instance == null) return;
-        var floorData = GetFloorObjectList(stage, map);
-        foreach (var (type, pos) in floorData)
-            FloorObjectManager.Instance.Spawn(type, pos);
-    }
-
-    private List<(FloorObject.ObjectType, Vector2Int)> GetFloorObjectList(int stage, int map)
+    // ── 스테이지/맵별 바닥 오브젝트 종류 정의 (위치는 SpawnCurrentMap에서 랜덤 배정) ──
+    private static List<FloorObject.ObjectType> GetFloorObjectTypes(int stage, int map)
     {
         var H = FloorObject.ObjectType.Heart;
         var T = FloorObject.ObjectType.Trap;
 
         return (stage, map) switch
         {
-            (1, 1) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(4, 0)), (T, new Vector2Int(7, 5)),
-                (H, new Vector2Int(2, 5)),
-            },
-            (1, 2) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(3, 2)), (T, new Vector2Int(5, 6)),
-                (H, new Vector2Int(6, 4)),
-            },
-            (1, 3) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(2, 2)), (T, new Vector2Int(6, 6)),
-                (T, new Vector2Int(2, 6)), (T, new Vector2Int(6, 2)),
-                (H, new Vector2Int(4, 6)),
-            },
-            (2, 1) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(2, 1)), (T, new Vector2Int(6, 7)),
-                (H, new Vector2Int(4, 3)),
-            },
-            (2, 2) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(1, 5)), (T, new Vector2Int(7, 1)),
-                (T, new Vector2Int(5, 7)),
-                (H, new Vector2Int(3, 5)),
-            },
-            (2, 3) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(1, 1)), (T, new Vector2Int(7, 7)),
-                (T, new Vector2Int(1, 7)), (T, new Vector2Int(7, 1)),
-                (H, new Vector2Int(6, 5)),
-            },
-            (3, 1) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(2, 0)), (T, new Vector2Int(6, 4)),
-                (T, new Vector2Int(0, 6)),
-                (H, new Vector2Int(4, 2)),
-            },
-            (3, 2) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(1, 3)), (T, new Vector2Int(7, 3)),
-                (T, new Vector2Int(4, 1)), (T, new Vector2Int(4, 7)),
-                (H, new Vector2Int(1, 1)), (H, new Vector2Int(7, 7)),
-            },
-            (3, 3) => new List<(FloorObject.ObjectType, Vector2Int)>
-            {
-                (T, new Vector2Int(0, 0)), (T, new Vector2Int(7, 0)),
-                (T, new Vector2Int(0, 7)), (T, new Vector2Int(7, 7)),
-                (T, new Vector2Int(3, 3)), (T, new Vector2Int(5, 3)),
-                (H, new Vector2Int(3, 7)), (H, new Vector2Int(5, 7)),
-            },
-            _ => new List<(FloorObject.ObjectType, Vector2Int)>()
+            (1, 1) => new List<FloorObject.ObjectType> { T, T, H },
+            (1, 2) => new List<FloorObject.ObjectType> { T, T, H },
+            (1, 3) => new List<FloorObject.ObjectType> { T, T, T, T, H },
+            (2, 1) => new List<FloorObject.ObjectType> { T, T, H },
+            (2, 2) => new List<FloorObject.ObjectType> { T, T, T, H },
+            (2, 3) => new List<FloorObject.ObjectType> { T, T, T, T, H },
+            (3, 1) => new List<FloorObject.ObjectType> { T, T, T, H },
+            (3, 2) => new List<FloorObject.ObjectType> { T, T, T, T, H, H },
+            (3, 3) => new List<FloorObject.ObjectType> { T, T, T, T, T, T, H, H },
+            _      => new List<FloorObject.ObjectType>()
         };
     }
 
