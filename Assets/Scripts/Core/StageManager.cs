@@ -32,7 +32,8 @@ public class StageManager : MonoBehaviour
     }
 
     // ── 현재 맵 적 스폰 ───────────────────────────────────────────────────
-    public void SpawnCurrentMap()
+    /// <param name="keepPlayerPosition">true = 플레이어 위치 유지, 적/오브젝트만 랜덤 배치</param>
+    public void SpawnCurrentMap(bool keepPlayerPosition = false)
     {
         FloorObjectManager.Instance?.ClearAll();
         EnemyManager.Instance.Reset();
@@ -40,28 +41,46 @@ public class StageManager : MonoBehaviour
         var enemyTypes = GetEnemyTypes(CurrentStage, CurrentMap);
         var floorTypes = GetFloorObjectTypes(CurrentStage, CurrentMap);
 
-        // 플레이어 1 + 적 + 바닥 오브젝트 전부 겹치지 않게 랜덤 배치
+        var player   = TurnManager.Instance.GetPlayer();
         var occupied = new HashSet<Vector2Int>();
-        var positions = PickRandomPositions(1 + enemyTypes.Count + floorTypes.Count, occupied);
 
-        // 플레이어 재배치
-        var player = TurnManager.Instance.GetPlayer();
-        if (player != null)
+        if (keepPlayerPosition && player != null)
         {
-            BoardManager.Instance.GetTile(player.GridPos)?.ClearUnit();
-            player.PlaceOnBoard(positions[0]);
+            // 플레이어 현재 위치 유지 — 적/바닥 오브젝트만 랜덤 배치
+            Vector2Int savedPos = player.GridPos;
+            occupied.Add(savedPos);
+            var positions = PickRandomPositions(enemyTypes.Count + floorTypes.Count, occupied);
+
+            BoardManager.Instance.GetTile(savedPos)?.ClearUnit();
+            player.PlaceOnBoard(savedPos);
+
+            for (int i = 0; i < enemyTypes.Count; i++)
+                SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), positions[i]);
+
+            if (FloorObjectManager.Instance != null)
+                for (int i = 0; i < floorTypes.Count; i++)
+                    FloorObjectManager.Instance.Spawn(floorTypes[i], positions[enemyTypes.Count + i]);
         }
-
-        // 적 스폰
-        for (int i = 0; i < enemyTypes.Count; i++)
-            SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), positions[1 + i]);
-
-        // 바닥 오브젝트 스폰
-        if (FloorObjectManager.Instance != null)
+        else
         {
-            int offset = 1 + enemyTypes.Count;
-            for (int i = 0; i < floorTypes.Count; i++)
-                FloorObjectManager.Instance.Spawn(floorTypes[i], positions[offset + i]);
+            // 플레이어 포함 전부 랜덤 배치
+            var positions = PickRandomPositions(1 + enemyTypes.Count + floorTypes.Count, occupied);
+
+            if (player != null)
+            {
+                BoardManager.Instance.GetTile(player.GridPos)?.ClearUnit();
+                player.PlaceOnBoard(positions[0]);
+            }
+
+            for (int i = 0; i < enemyTypes.Count; i++)
+                SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), positions[1 + i]);
+
+            if (FloorObjectManager.Instance != null)
+            {
+                int offset = 1 + enemyTypes.Count;
+                for (int i = 0; i < floorTypes.Count; i++)
+                    FloorObjectManager.Instance.Spawn(floorTypes[i], positions[offset + i]);
+            }
         }
 
         // 배경 이미지 적용
@@ -158,11 +177,13 @@ public class StageManager : MonoBehaviour
         }
 
         // 스테이지가 바뀌면 플레이어 캐릭터 교체
-        if (CurrentStage != prevStage)
+        bool stageChanged = (CurrentStage != prevStage);
+        if (stageChanged)
             SwitchPlayerForStage(CurrentStage);
 
         BoardManager.Instance.ClearAllHighlights();
-        SpawnCurrentMap();
+        // 같은 스테이지 내 맵 이동 시 플레이어 위치 유지
+        SpawnCurrentMap(keepPlayerPosition: !stageChanged);
         GameManager.Instance.ChangeState(GameManager.GameState.PlayerTurn);
     }
 

@@ -70,7 +70,7 @@ public class StageSelectScreen : MonoBehaviour
             "플레이할 캐릭터를 선택하세요", 22, new Color(0.60f, 0.70f, 0.80f), TextAnchor.MiddleCenter);
 
         // ── 스테이지 카드 3개 ─────────────────────────────────────────────
-        float[] xPos = { -430f, 0f, 430f };
+        float[] xPos = { -570f, 0f, 570f };
         for (int i = 0; i < 3; i++)
             BuildCard(panel.transform, i + 1, xPos[i]);
 
@@ -92,8 +92,8 @@ public class StageSelectScreen : MonoBehaviour
         card.transform.SetParent(parent, false);
         var crt = card.AddComponent<RectTransform>();
         crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
-        crt.anchoredPosition = new Vector2(xOffset, 10f);
-        crt.sizeDelta        = new Vector2(360, 480);
+        crt.anchoredPosition = new Vector2(xOffset, 0f);
+        crt.sizeDelta        = new Vector2(540, 720);
         card.AddComponent<Image>().color = new Color(0.08f, 0.10f, 0.17f, 1f);
 
         // ── 스테이지 배경 이미지 (카드 전체 영역, 잠금시 숨김) ───────────────
@@ -102,11 +102,11 @@ public class StageSelectScreen : MonoBehaviour
         var imgRt = imgGo.AddComponent<RectTransform>();
         imgRt.anchorMin = Vector2.zero; imgRt.anchorMax = Vector2.one; imgRt.sizeDelta = Vector2.zero;
         var stageImg = imgGo.AddComponent<Image>();
-        stageImg.preserveAspect = false; // 카드에 꽉 채움
-        // 이미지 로드 시도 (없으면 투명)
+        stageImg.preserveAspect = true; // 비율 유지, 중앙 정렬
+        // 이미지 로드 시도 (색상은 RefreshLockState에서 결정)
         Sprite stageSp = LoadStageImage(stage);
-        if (stageSp != null) { stageImg.sprite = stageSp; stageImg.color = new Color(1f, 1f, 1f, 0.18f); }
-        else stageImg.color = Color.clear;
+        if (stageSp != null) stageImg.sprite = stageSp;
+        stageImg.color = Color.clear; // Show() → RefreshLockState()에서 갱신
         stageImgs[stage - 1] = stageImg;
 
         // ── 상단 컬러 바 ──────────────────────────────────────────────────
@@ -123,46 +123,46 @@ public class StageSelectScreen : MonoBehaviour
         // ── STAGE 번호 ────────────────────────────────────────────────────
         MakeText(card.transform, "StageNum",
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0, -42), new Vector2(300, 40),
-            $"STAGE {stage}", 24,
+            new Vector2(0, -55), new Vector2(440, 50),
+            $"STAGE {stage}", 28,
             new Color(info.color.r, info.color.g, info.color.b, 0.9f), TextAnchor.MiddleCenter);
 
         // ── 캐릭터 이모지 ─────────────────────────────────────────────────
         MakeText(card.transform, "Emoji",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, 108), new Vector2(200, 120),
-            info.emoji, 70, Color.white, TextAnchor.MiddleCenter);
+            new Vector2(0, 160), new Vector2(220, 140),
+            info.emoji, 80, Color.white, TextAnchor.MiddleCenter);
 
         // ── 캐릭터 이름 ───────────────────────────────────────────────────
         MakeText(card.transform, "CharName",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, 22), new Vector2(300, 46),
-            info.name, 30, Color.white, TextAnchor.MiddleCenter);
+            new Vector2(0, 40), new Vector2(440, 54),
+            info.name, 34, Color.white, TextAnchor.MiddleCenter);
 
         // ── 스킬 설명 ─────────────────────────────────────────────────────
         MakeText(card.transform, "Skills",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, -72), new Vector2(316, 90),
-            info.skills, 20, new Color(0.68f, 0.74f, 0.82f), TextAnchor.MiddleCenter);
+            new Vector2(0, -90), new Vector2(460, 120),
+            info.skills, 22, new Color(0.68f, 0.74f, 0.82f), TextAnchor.MiddleCenter);
 
         // ── HP 표시 ───────────────────────────────────────────────────────
         MakeText(card.transform, "HP",
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-            new Vector2(0, 102), new Vector2(200, 34),
-            "♥ ♥ ♥", 22, new Color(1f, 0.38f, 0.48f), TextAnchor.MiddleCenter);
+            new Vector2(0, 138), new Vector2(280, 40),
+            "♥ ♥ ♥", 26, new Color(1f, 0.38f, 0.48f), TextAnchor.MiddleCenter);
 
         // ── 맵 구성 + 클리어 표시 (동적 갱신용 참조 보관) ─────────────────
         var mapsText = MakeText(card.transform, "Maps",
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-            new Vector2(0, 68), new Vector2(310, 32),
-            GetMapsLabel(stage), 20,
+            new Vector2(0, 96), new Vector2(460, 36),
+            GetMapsLabel(stage), 21,
             new Color(0.50f, 0.62f, 0.72f), TextAnchor.MiddleCenter);
         mapsText.supportRichText = true;
         mapsClearTxts[stage - 1] = mapsText;
 
         // ── 시작 버튼 ─────────────────────────────────────────────────────
         var startBtn = MakeButton(card.transform, "StartBtn",
-            new Vector2(0.5f, 0f), new Vector2(0, 30), new Vector2(300, 52));
+            new Vector2(0.5f, 0f), new Vector2(0, 38), new Vector2(440, 60));
         SetBtnStyle(startBtn, $"스테이지 {stage} 시작", info.color);
         int s = stage; // closure capture
         startBtn.onClick.AddListener(() => StartFromStage(s));
@@ -207,6 +207,8 @@ public class StageSelectScreen : MonoBehaviour
     /// <summary>PlayerPrefs에서 잠금 상태를 읽어 카드 UI를 갱신</summary>
     private void RefreshLockState()
     {
+        bool showImages = CheatManager.Instance != null && CheatManager.Instance.ShowSensitiveImages;
+
         for (int i = 0; i < 3; i++)
         {
             int  stage    = i + 1;
@@ -215,11 +217,14 @@ public class StageSelectScreen : MonoBehaviour
             if (startBtns[i]    != null) startBtns[i].interactable    = unlocked;
             if (lockOverlays[i] != null) lockOverlays[i].SetActive(!unlocked);
 
-            // 해금된 경우 이미지를 더 선명하게, 잠긴 경우 투명하게
+            // 이미지: 해금 + ShowSensitiveImages 모두 충족해야 표시
             if (stageImgs[i] != null && stageImgs[i].sprite != null)
-                stageImgs[i].color = unlocked
-                    ? new Color(1f, 1f, 1f, 0.28f)
-                    : new Color(1f, 1f, 1f, 0.06f);
+            {
+                if (!unlocked || !showImages)
+                    stageImgs[i].color = Color.clear;
+                else
+                    stageImgs[i].color = new Color(1f, 1f, 1f, 0.28f);
+            }
 
             // 맵별 클리어 표시 갱신
             if (mapsClearTxts[i] != null)
@@ -246,7 +251,7 @@ public class StageSelectScreen : MonoBehaviour
     // ── 헬퍼 ─────────────────────────────────────────────────────────────
     private Sprite LoadStageImage(int stage)
     {
-        string path = $"Stage/Stage{stage}";
+        string path = $"Stage/Landscape_{stage}";
         Sprite sp = Resources.Load<Sprite>(path);
         if (sp != null) return sp;
         Texture2D tex = Resources.Load<Texture2D>(path);

@@ -227,7 +227,9 @@ public class SpecialSceneController : MonoBehaviour
         yield return null; // 한 프레임 대기 (렌더링 반영)
 
         // Landscape_{stage} 이미지로 패닝 (없으면 단색 배경으로 폴백)
-        Sprite landSp = LoadImage("Stage", $"Landscape_{stage}");
+        // ShowSensitiveImages=false 일 때 이미지 표시 안 함
+        bool showImg = CheatManager.Instance == null || CheatManager.Instance.ShowSensitiveImages;
+        Sprite landSp = showImg ? LoadImage("Stage", $"Landscape_{stage}") : null;
         if (landSp != null)
         {
             landscapeImg.sprite = landSp;
@@ -281,8 +283,9 @@ public class SpecialSceneController : MonoBehaviour
         yield return StartCoroutine(FadeToBlack(0.4f));
         sceneRoot.SetActive(false);
 
-        // 풍경 이미지 설정
-        Sprite landSp = LoadImage("Stage", $"Landscape_{stage}");
+        // 풍경 이미지 설정 (ShowSensitiveImages=false 일 때 이미지 표시 안 함)
+        bool showImg2 = CheatManager.Instance == null || CheatManager.Instance.ShowSensitiveImages;
+        Sprite landSp = showImg2 ? LoadImage("Stage", $"Landscape_{stage}") : null;
         if (landSp != null)
         {
             landscapeImg.sprite = landSp;
