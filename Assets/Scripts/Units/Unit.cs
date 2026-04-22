@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public abstract class Unit : MonoBehaviour
 {
@@ -141,6 +142,40 @@ public abstract class Unit : MonoBehaviour
         GridPos = pos;
         transform.position = BoardManager.Instance.GridToWorld(pos);
         BoardManager.Instance.GetTile(pos)?.SetUnit(this);
+    }
+
+    /// <summary>
+    /// 부드러운 넉백 애니메이션 — 경로를 따라 타일마다 Lerp 이동 후 onComplete 콜백
+    /// </summary>
+    public void StartSmoothKnockback(List<Vector2Int> path, System.Action onComplete)
+    {
+        StartCoroutine(SmoothKnockbackCoroutine(path, onComplete));
+    }
+
+    private IEnumerator SmoothKnockbackCoroutine(List<Vector2Int> path, System.Action onComplete)
+    {
+        const float stepDuration = 0.07f; // 타일 1칸당 이동 시간
+        foreach (var pos in path)
+        {
+            Vector3 startPos  = transform.position;
+            Vector3 targetPos = BoardManager.Instance.GridToWorld(pos);
+
+            // 그리드 위치 선점 (시각적 이동 전에 점유 처리)
+            BoardManager.Instance.GetTile(GridPos)?.ClearUnit();
+            GridPos = pos;
+            BoardManager.Instance.GetTile(pos)?.SetUnit(this);
+
+            float elapsed = 0f;
+            while (elapsed < stepDuration)
+            {
+                if (this == null || !gameObject.activeInHierarchy) yield break;
+                transform.position = Vector3.Lerp(startPos, targetPos, elapsed / stepDuration);
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+            transform.position = targetPos;
+        }
+        onComplete?.Invoke();
     }
 
     public bool IsInAttackRange(Unit target)

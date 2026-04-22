@@ -6,12 +6,13 @@ using UnityEngine;
 /// [Heart]   — 플레이어가 밟으면 HP +1 회복 후 사라짐
 /// [Trap]    — 밟으면 1 데미지, 발동 후 1턴 쿨다운
 /// [Element] — 원소포설 스킬로 생성. 원소별 효과:
-///   불  → 화상 (DoT 2데미지 × 2턴), 밟는 순간 1회 발동 후 사라짐
+///   불  → 화상 (DoT 1데미지 × 1턴), 밟는 순간 1회 발동 후 사라짐
+///         전도 상태면 2데미지 × 1턴
 ///   땅  → 벽 생성 (영구 벽 타일, 이동 불가). 밟혀도 사라지지 않음
 ///   나무 → 전도 (다음 원소 효과 2배 1회), 밟는 순간 1회 발동 후 사라짐
-///   물  → 밀쳐내기 (플레이어 반대 방향 최대 3칸 + 벽 충돌 데미지), 1회 발동 후 사라짐
-///         전도 상태 유닛이 밟으면 효과 2배 (push 6칸, 충돌 데미지 2배)
-///         충돌 대상이 땅 원소 벽이면 충돌 데미지 추가 2배
+///   물  → 밀쳐내기 (플레이어 반대 방향으로 벽/맵 끝까지), 1회 발동 후 사라짐
+///         충돌 시 데미지 2. 전도 상태면 충돌 데미지 2배(4).
+///         충돌 대상이 땅 원소 벽이면 추가로 2배. 부드럽게 슬라이드 이동.
 /// </summary>
 public class FloorObject : MonoBehaviour
 {
@@ -119,10 +120,10 @@ public class FloorObject : MonoBehaviour
         switch (Element)
         {
             case ElementType.Fire:
-                // 화상: 2데미지 × 2턴 (전도 시 4데미지 × 2턴)
-                seh.ApplyBurn(2 * mult, 2);
+                // 화상: 1데미지 × 1턴 (전도 시 2데미지 × 1턴)
+                seh.ApplyBurn(1 * mult, 1);
                 EffectManager.Instance?.PlayFireHit(unit.transform.position);
-                Debug.Log($"[원소바닥] 불 — {unit.name} 화상 {2 * mult}×2턴" + (doubled ? " (전도!)" : ""));
+                Debug.Log($"[원소바닥] 불 — {unit.name} 화상 {1 * mult}×1턴" + (doubled ? " (전도!)" : ""));
                 break;
 
             case ElementType.Wood:
@@ -137,8 +138,8 @@ public class FloorObject : MonoBehaviour
                 if (unit is EnemyUnit)
                 {
                     EffectManager.Instance?.PlayWaterHit(unit.transform.position);
-                    ApplyKnockback(unit, mult);
-                    Debug.Log($"[원소바닥] 물 — {unit.name} 밀쳐내기 (×{mult})" + (doubled ? " (전도!)" : ""));
+                    ApplyKnockback(unit, doubled);
+                    Debug.Log($"[원소바닥] 물 — {unit.name} 밀쳐내기" + (doubled ? " (전도! 충돌 데미지 2배)" : ""));
                 }
                 break;
         }
@@ -148,7 +149,7 @@ public class FloorObject : MonoBehaviour
     }
 
     // ── 밀쳐내기 ─────────────────────────────────────────────────────────
-    private void ApplyKnockback(Unit unit, int mult)
+    private void ApplyKnockback(Unit unit, bool doubled)
     {
         var player = TurnManager.Instance?.GetPlayer();
         if (player == null) return;
@@ -160,46 +161,63 @@ public class FloorObject : MonoBehaviour
         else
             pushDir = GridUtil.SnapToCardinal(unit.GridPos - player.GridPos);
 
-        int maxPush        = 3 * mult; // 전도 시 6칸
-        int collisionDmg   = 2 * mult; // 전도 시 4
+        // 충돌 데미지: 기본 2, 전도 시 2배(4)
+        int collisionDmg = doubled ? 4 : 2;
+
+        // ── 경로 계산 (벽/맵 끝까지) ───────────────────────────────────
+        var    movePath   = new System.Collections.Generic.List<Vector2Int>();
+        int    pendingDmg = 0;
+        string wallTag    = "";
 
         Vector2Int cur = unit.GridPos;
-        bool hitWall   = false;
+        const int  maxSearch = 32; // 맵 최대 크기보다 충분히 큰 값
 
-        for (int i = 0; i < maxPush; i++)
+        for (int i = 0; i < maxSearch; i++)
         {
-            Vector2Int next    = cur + pushDir;
+            Vector2Int next     = cur + pushDir;
             Tile       nextTile = BoardManager.Instance.GetTile(next);
 
-            // ① 맵 외곽 — 충돌 데미지 (일반 × mult)
+            // ① 맵 외곽
             if (nextTile == null)
             {
-                unit.TakeDamage(collisionDmg);
-                GameUI.Instance?.ShowNotify($"💥 {unit.name} 맵 끝 충돌! -{collisionDmg}", 1.0f);
-                hitWall = true;
+                pendingDmg = collisionDmg;
+                wallTag    = "맵 끝";
                 break;
             }
 
-            // ② 벽 타일 — 충돌 데미지 (땅 원소 벽이면 2배 추가)
+            // ② 벽/점유 타일 — 땅 원소 벽이면 추가 2배
             if (nextTile.IsWall || nextTile.IsOccupied)
             {
                 bool isEarthWall = nextTile.IsWall && IsEarthWallAt(next);
-                int  dmg         = isEarthWall ? collisionDmg * 2 : collisionDmg;
-                unit.TakeDamage(dmg);
-                string wallTag   = isEarthWall ? " (땅벽 2배!)" : "";
-                GameUI.Instance?.ShowNotify($"💥 {unit.name} 충돌! -{dmg}{wallTag}", 1.0f);
-                Debug.Log($"[넉백] {unit.name} 충돌 {dmg} 데미지{wallTag}");
-                hitWall = true;
+                pendingDmg = isEarthWall ? collisionDmg * 2 : collisionDmg;
+                wallTag    = isEarthWall ? "땅벽" : "벽";
                 break;
             }
 
-            // ③ 이동 가능 — ForceMove 사용 (즉시, 애니메이션 없음)
-            unit.ForceMove(next);
+            // ③ 이동 가능 타일
+            movePath.Add(next);
             cur = next;
         }
 
-        if (!hitWall)
-            Debug.Log($"[넉백] {unit.name} {maxPush}칸 이동 (충돌 없음)");
+        // ── 부드러운 이동 애니메이션 후 충돌 데미지 처리 ───────────────
+        int    finalDmg  = pendingDmg;
+        string finalTag  = wallTag;
+        bool   willHit   = pendingDmg > 0;
+        string unitName  = unit.name;
+
+        unit.StartSmoothKnockback(movePath, () =>
+        {
+            if (!willHit) return;
+            if (unit == null || !unit.IsAlive) return;
+            unit.TakeDamage(finalDmg);
+            string extraTag = doubled && finalTag == "땅벽" ? " (전도+땅벽!)" :
+                              doubled                        ? " (전도!)"     :
+                              finalTag == "땅벽"             ? " (땅벽 2배!)" : "";
+            GameUI.Instance?.ShowNotify($"💥 {unitName} {finalTag} 충돌! -{finalDmg}{extraTag}", 1.0f);
+            Debug.Log($"[넉백] {unitName} {finalTag} 충돌 {finalDmg} 데미지{extraTag}");
+        });
+
+        Debug.Log($"[넉백] {unitName} 경로 {movePath.Count}칸" + (willHit ? $" → {wallTag} 충돌 예정" : " (충돌 없음)"));
     }
 
     private static bool IsEarthWallAt(Vector2Int pos)
