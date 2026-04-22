@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
@@ -38,6 +39,14 @@ public class GalleryScreen : MonoBehaviour
 
     private GameObject fullViewPanel;
     private Image      fullViewImage;
+    private Image      fullViewLockedOverlay;
+    private Text       fullViewLockedText;
+    private Button     fvPrevBtn, fvNextBtn;
+    private Text       fvPageText;
+
+    private int fullViewIndex;
+    // 현재 스테이지의 모든 셀 순서 (row, col)
+    private readonly List<(int row, int col)> fullViewOrder = new List<(int, int)>();
 
     private Text  toastText;
     private float toastTimer;
@@ -57,6 +66,14 @@ public class GalleryScreen : MonoBehaviour
         }
 
         if (Keyboard.current == null) return;
+
+        // 전체화면 감상 중 ← → 키 네비게이션
+        if (fullViewPanel != null && fullViewPanel.activeSelf)
+        {
+            if (Keyboard.current.leftArrowKey.wasPressedThisFrame)  NavigateFullView(-1);
+            if (Keyboard.current.rightArrowKey.wasPressedThisFrame) NavigateFullView(1);
+        }
+
         if (!Keyboard.current.escapeKey.wasPressedThisFrame) return;
 
         if (fullViewPanel != null && fullViewPanel.activeSelf)
@@ -279,8 +296,9 @@ public class GalleryScreen : MonoBehaviour
         fullViewPanel.transform.SetParent(canvasRoot, false);
         var rt = fullViewPanel.AddComponent<RectTransform>();
         rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.sizeDelta = Vector2.zero;
-        fullViewPanel.AddComponent<Image>().color = new Color(0, 0, 0, 0.94f);
+        fullViewPanel.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.96f);
 
+        // ── 메인 이미지 ───────────────────────────────────────────────────
         fullViewImage = new GameObject("FullImg").AddComponent<Image>();
         fullViewImage.transform.SetParent(fullViewPanel.transform, false);
         var irt = fullViewImage.rectTransform;
@@ -289,12 +307,112 @@ public class GalleryScreen : MonoBehaviour
         irt.sizeDelta = Vector2.zero;
         fullViewImage.preserveAspect = true;
 
+        // ── 잠금/비공개 오버레이 (이미지 영역 위) ────────────────────────
+        var lockOvGo = new GameObject("LockedOverlay");
+        lockOvGo.transform.SetParent(fullViewPanel.transform, false);
+        var lovrt = lockOvGo.AddComponent<RectTransform>();
+        lovrt.anchorMin = new Vector2(0.08f, 0.08f);
+        lovrt.anchorMax = new Vector2(0.92f, 0.92f);
+        lovrt.sizeDelta = Vector2.zero;
+        fullViewLockedOverlay = lockOvGo.AddComponent<Image>();
+        fullViewLockedOverlay.color = new Color(0.04f, 0.04f, 0.08f, 1f);
+
+        var lockMsgGo = new GameObject("LockMsg");
+        lockMsgGo.transform.SetParent(lockOvGo.transform, false);
+        var lmrt = lockMsgGo.AddComponent<RectTransform>();
+        lmrt.anchorMin = lmrt.anchorMax = new Vector2(0.5f, 0.5f);
+        lmrt.anchoredPosition = Vector2.zero;
+        lmrt.sizeDelta = new Vector2(800f, 180f);
+        fullViewLockedText = lockMsgGo.AddComponent<Text>();
+        fullViewLockedText.font           = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        fullViewLockedText.fontSize       = 34;
+        fullViewLockedText.alignment      = TextAnchor.MiddleCenter;
+        fullViewLockedText.color          = new Color(0.55f, 0.58f, 0.72f);
+        fullViewLockedText.supportRichText = true;
+        // 기본 잠금 메시지 — ShowFullViewAt()에서 상황에 맞게 덮어씀
+        fullViewLockedText.text =
+            "🔒  봉인된 기억\n<size=22><color=#666880>아직 공개되지 않은 이야기입니다\n모험을 계속하면 열립니다</color></size>";
+
+        // ── 이전 버튼 ◀ ──────────────────────────────────────────────────
+        fvPrevBtn = MakeButton(fullViewPanel.transform, "FVPrev",
+            new Vector2(0f, 0.5f), new Vector2(44f, 0f), new Vector2(72f, 130f));
+        SetBtnStyle(fvPrevBtn, "◀", new Color(0.15f, 0.18f, 0.28f, 0.88f));
+        fvPrevBtn.GetComponentInChildren<Text>().fontSize = 30;
+        fvPrevBtn.onClick.AddListener(() => NavigateFullView(-1));
+
+        // ── 다음 버튼 ▶ ──────────────────────────────────────────────────
+        fvNextBtn = MakeButton(fullViewPanel.transform, "FVNext",
+            new Vector2(1f, 0.5f), new Vector2(-44f, 0f), new Vector2(72f, 130f));
+        SetBtnStyle(fvNextBtn, "▶", new Color(0.15f, 0.18f, 0.28f, 0.88f));
+        fvNextBtn.GetComponentInChildren<Text>().fontSize = 30;
+        fvNextBtn.onClick.AddListener(() => NavigateFullView(1));
+
+        // ── 페이지 표시 (하단 중앙) ───────────────────────────────────────
+        fvPageText = MakeText(fullViewPanel.transform, "FVPage",
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 40f), new Vector2(300f, 40f),
+            "", 20, new Color(0.55f, 0.6f, 0.75f), TextAnchor.MiddleCenter);
+
+        // ── 닫기 버튼 ────────────────────────────────────────────────────
         var closeBtn = MakeButton(fullViewPanel.transform, "FVClose",
-            new Vector2(1f, 1f), new Vector2(-70, -70), new Vector2(120, 50));
+            new Vector2(1f, 1f), new Vector2(-70f, -70f), new Vector2(120f, 50f));
         SetBtnStyle(closeBtn, "✕ 닫기", new Color(0.5f, 0.2f, 0.2f));
         closeBtn.onClick.AddListener(() => fullViewPanel.SetActive(false));
+
         fullViewPanel.SetActive(false);
     }
+
+    // ── 풀뷰 순서 목록 빌드 ──────────────────────────────────────────────
+    private void BuildFullViewOrder()
+    {
+        fullViewOrder.Clear();
+        // Row 0: 초상화 HP3·2·1·0 (4개)
+        for (int c = 0; c < 4; c++)
+            fullViewOrder.Add((0, c));
+        // Row 1: 스테이지·배경·클리어·패배 (6개)
+        for (int c = 0; c < COLS; c++)
+            fullViewOrder.Add((1, c));
+    }
+
+    // ── 인덱스 지정 풀뷰 표시 ────────────────────────────────────────────
+    private void ShowFullViewAt(int index)
+    {
+        if (fullViewOrder.Count == 0) return;
+        fullViewIndex = ((index % fullViewOrder.Count) + fullViewOrder.Count) % fullViewOrder.Count;
+
+        var (row, col) = fullViewOrder[fullViewIndex];
+        bool locked     = lockIcons[row, col] != null && lockIcons[row, col].activeSelf;
+        bool showImages = CheatManager.Instance == null || CheatManager.Instance.ShowSensitiveImages;
+        var  img        = cellImgs[row, col];
+
+        if (locked)
+        {
+            fullViewImage.gameObject.SetActive(false);
+            fullViewLockedOverlay.gameObject.SetActive(true);
+            fullViewLockedText.text =
+                "🔒  봉인된 기억\n<size=22><color=#666880>아직 공개되지 않은 이야기입니다\n모험을 계속하면 열립니다</color></size>";
+        }
+        else if (!showImages || img == null || img.sprite == null)
+        {
+            fullViewImage.gameObject.SetActive(false);
+            fullViewLockedOverlay.gameObject.SetActive(true);
+            fullViewLockedText.text = locked
+                ? "🔒  봉인된 기억\n<size=22><color=#666880>아직 공개되지 않은 이야기입니다\n모험을 계속하면 열립니다</color></size>"
+                : "<size=26><color=#888899>이미지 파일이 없습니다</color></size>";
+        }
+        else
+        {
+            fullViewImage.sprite = img.sprite;
+            fullViewImage.gameObject.SetActive(true);
+            fullViewLockedOverlay.gameObject.SetActive(false);
+        }
+
+        if (fvPageText != null)
+            fvPageText.text = $"{fullViewIndex + 1}  /  {fullViewOrder.Count}";
+    }
+
+    // ── 이전/다음 네비게이션 ─────────────────────────────────────────────
+    private void NavigateFullView(int dir) => ShowFullViewAt(fullViewIndex + dir);
 
     // ═══════════════════════════════════════════════════════════════════════
     // 공개 API
@@ -319,6 +437,7 @@ public class GalleryScreen : MonoBehaviour
         detailTitle.text = $"STAGE {stage}  ·  {StageNames[stage - 1]}";
         stageSelectPanel.SetActive(false);
         detailPanel.SetActive(true);
+        BuildFullViewOrder();
         RefreshDetail();
     }
 
@@ -400,18 +519,11 @@ public class GalleryScreen : MonoBehaviour
 
     private void OnCellClick(int row, int col)
     {
-        if (lockIcons[row, col] != null && lockIcons[row, col].activeSelf)
-        {
-            ShowToast("🔒 아직 열리지 않은 이미지입니다");
-            return;
-        }
-        var img = cellImgs[row, col];
-        if (img == null || img.sprite == null)
-        {
-            ShowToast("이미지 파일을 찾을 수 없습니다");
-            return;
-        }
-        fullViewImage.sprite = img.sprite;
+        // 풀뷰 순서에서 해당 셀 인덱스 찾기
+        int idx = fullViewOrder.IndexOf((row, col));
+        if (idx < 0) return;
+
+        ShowFullViewAt(idx);
         fullViewPanel.SetActive(true);
     }
 

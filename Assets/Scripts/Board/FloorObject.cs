@@ -99,7 +99,10 @@ public class FloorObject : MonoBehaviour
         if (!IsActive) return false;
         unit.TakeDamage(1);
         if (!unit.IsAlive && unit is PlayerUnit)
+        {
             GameManager.LastKillerName = "Trap";
+            GameManager.Instance?.OnPlayerDead();
+        }
         EffectManager.Instance?.PlayBlood(unit.transform.position);
         StartCooldown();
         return true;
