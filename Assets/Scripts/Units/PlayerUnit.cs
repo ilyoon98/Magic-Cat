@@ -2,71 +2,96 @@ using UnityEngine;
 
 /// <summary>
 /// 플레이어 유닛 베이스
-/// 턴당 행동 1개 (이동 OR 공격 OR 스킬)
-/// 공격: 클릭 방향을 4방향으로 스냅 → 직선으로 투사체 발사 (사거리 무제한)
-///        적이 없어도 발사되며 턴 종료
+///
+/// [턴 구조] 턴당 최대 2행동 — 이동 / 평타 / 스킬 각 1회씩 사용 가능
+///   · 2행동 소진 → 자동 턴 종료
+///   · 1행동 후 Space → 수동 턴 종료
 /// </summary>
 public abstract class PlayerUnit : Unit
 {
     protected SkillBase skill1;
     protected SkillBase skill2;
 
-    public bool HasActedThisTurn { get; private set; }
+    // ── 턴 행동 추적 ─────────────────────────────────────────────────────
+    protected bool hasMovedThisTurn     = false;
+    protected bool hasAttackedThisTurn  = false;
+    protected bool hasUsedSkillThisTurn = false;
+
+    /// <summary>이번 턴에 사용한 행동 수 (0~2)</summary>
+    public int  ActionsUsed { get; protected set; } = 0;
+
+    /// <summary>2행동 모두 소진 — 더 이상 입력 불가</summary>
+    public bool HasActedThisTurn  => ActionsUsed >= 2;
+
+    public bool CanMove     => !hasMovedThisTurn     && ActionsUsed < 2;
+    public bool CanAttack   => !hasAttackedThisTurn  && ActionsUsed < 2;
+    public bool CanUseSkill => !hasUsedSkillThisTurn && ActionsUsed < 2;
 
     /// <summary>투사체 색상 — 캐릭터별 오버라이드</summary>
     protected virtual Color AttackColor => Color.white;
     protected virtual float AttackSpeed => 12f;
 
+    /// <summary>평타 도달 거리. 0 = 방향 직선 무제한, 1 = 인접 1칸 등</summary>
+    public virtual int AttackReach => 0;
+
+    // ── 턴 시작 시 행동 초기화 ───────────────────────────────────────────
     public virtual void StartTurn()
     {
-        HasActedThisTurn = false;
+        hasMovedThisTurn     = false;
+        hasAttackedThisTurn  = false;
+        hasUsedSkillThisTurn = false;
+        ActionsUsed          = 0;
     }
 
     // ── 이동 ─────────────────────────────────────────────────────────────
     public bool TryMove(Vector2Int direction)
     {
-        if (HasActedThisTurn) return false;
+        if (!CanMove) return false;
+
+        // 이동봉쇄(스턴/속박) 상태 확인
+        var seh = GetComponent<StatusEffectHandler>();
+        if (seh != null && seh.IsImmobilized)
+        {
+            GameUI.Instance?.ShowNotify("이동 불가 상태!", 0.7f);
+            return false;
+        }
 
         Vector2Int target = GridPos + direction;
         Tile targetTile = BoardManager.Instance.GetTile(target);
-        if (targetTile == null || targetTile.IsOccupied) return false;
+        if (targetTile == null || targetTile.IsOccupied || targetTile.IsWall) return false;
 
         PlaceOnBoard(target);
-        HasActedThisTurn = true;
-
+        hasMovedThisTurn = true;
+        ActionsUsed++;
         skill1?.ReduceCooldown(1);
         skill2?.ReduceCooldown(1);
         return true;
     }
 
-    // ── 공격 — 방향 직선 발사, 사거리 무제한, 항상 턴 소모 ─────────────
-    public bool TryAttackToward(Vector2Int targetPos)
+    // ── 평타 — 방향 직선 발사, 항상 턴 소모 ─────────────────────────────
+    public virtual bool TryAttackToward(Vector2Int targetPos)
     {
-        if (HasActedThisTurn) return false;
+        if (!CanAttack) return false;
 
-        // 1. 클릭 방향을 4방향으로 스냅
-        Vector2Int dir = GridUtil.SnapToCardinal(targetPos - GridPos);
+        Vector2Int dir   = GridUtil.SnapToCardinal(targetPos - GridPos);
+        EnemyUnit  enemy = GridUtil.FindFirstEnemyInDir(GridPos, dir);
 
-        // 2. 해당 방향 직선 위 첫 번째 적 탐색
-        EnemyUnit enemy = GridUtil.FindFirstEnemyInDir(GridPos, dir);
-
-        // 3. 투사체 목표 좌표 결정
         Vector3 from = BoardManager.Instance.GridToWorld(GridPos);
         Vector3 to   = enemy != null
             ? BoardManager.Instance.GridToWorld(enemy.GridPos)
             : BoardManager.Instance.GridToWorld(GridUtil.GetFarEdge(GridPos, dir));
 
-        // 4. 투사체 발사 (항상)
         EnemyUnit captured = enemy;
         SkillProjectile.Fire(from, to, AttackColor, AttackSpeed, onHit: () =>
         {
             if (captured != null && captured.IsAlive)
-                Attack(captured);              // 캐릭터별 공격 효과 + 데미지
+                Attack(captured);
             else
-                EffectManager.Instance?.PlayAttack(to); // 빈 공간 히트 이펙트
+                EffectManager.Instance?.PlayAttack(to);
         });
 
-        HasActedThisTurn = true;
+        hasAttackedThisTurn = true;
+        ActionsUsed++;
         skill1?.ReduceCooldown(1);
         skill2?.ReduceCooldown(1);
         return true;
@@ -75,14 +100,21 @@ public abstract class PlayerUnit : Unit
     // ── 스킬 ─────────────────────────────────────────────────────────────
     public bool TryUseSkill(int skillIndex, Vector2Int targetPos)
     {
-        if (HasActedThisTurn) return false;
-
         SkillBase skill = skillIndex == 1 ? skill1 : skill2;
         if (skill == null || !skill.CanUse()) return false;
 
-        skill.Use(this, targetPos);
-        HasActedThisTurn = true;
+        // 자유 스킬(E 원소변경 등): 행동 슬롯 소모 없이 즉시 사용
+        if (skill.IsFree)
+        {
+            skill.Use(this, targetPos);
+            return true;
+        }
 
+        if (!CanUseSkill) return false;
+
+        skill.Use(this, targetPos);
+        hasUsedSkillThisTurn = true;
+        ActionsUsed++;
         skill1?.ReduceCooldown(1);
         skill2?.ReduceCooldown(1);
         return true;

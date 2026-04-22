@@ -132,6 +132,17 @@ public abstract class Unit : MonoBehaviour
         target.TakeDamage(attackDamage);
     }
 
+    /// <summary>
+    /// 강제 즉시 이동 (넉백 전용) — 애니메이션·바닥오브젝트 트리거 없음
+    /// </summary>
+    public void ForceMove(Vector2Int pos)
+    {
+        BoardManager.Instance.GetTile(GridPos)?.ClearUnit();
+        GridPos = pos;
+        transform.position = BoardManager.Instance.GridToWorld(pos);
+        BoardManager.Instance.GetTile(pos)?.SetUnit(this);
+    }
+
     public bool IsInAttackRange(Unit target)
     {
         int dist = Mathf.Abs(GridPos.x - target.GridPos.x) + Mathf.Abs(GridPos.y - target.GridPos.y);

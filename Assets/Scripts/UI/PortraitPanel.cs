@@ -85,7 +85,7 @@ public class PortraitPanel : MonoBehaviour
         // HP 하트 (35~65%)
         hpText = MakeTopText(root.transform, "HP",
             new Vector2(0.455f, 0f), new Vector2(0.70f, 1f),
-            "♥♥♥", 24, new Color(0.4f, 1f, 0.5f));
+            "♥♥♥", 50, new Color(0.4f, 1f, 0.5f));
 
         // 구분선
         MakeDivider(root.transform, 0.705f);
@@ -117,7 +117,7 @@ public class PortraitPanel : MonoBehaviour
         brt.anchorMax        = new Vector2(0f, 0f);
         brt.pivot            = new Vector2(0f, 0f);
         brt.anchoredPosition = new Vector2(10f, 10f);
-        brt.sizeDelta        = new Vector2(256f, 104f);
+        brt.sizeDelta        = new Vector2(470f, 200f);
         var bg = bar.AddComponent<Image>();
         bg.color = new Color(0.03f, 0.04f, 0.08f, 0.88f);
 
@@ -149,10 +149,10 @@ public class PortraitPanel : MonoBehaviour
         var keyLbl = new GameObject($"Key{key}");
         keyLbl.transform.SetParent(slot.transform, false);
         var klrt = keyLbl.AddComponent<RectTransform>();
-        klrt.anchorMin = new Vector2(0f, 0.80f); klrt.anchorMax = new Vector2(1f, 1f);
+        klrt.anchorMin = new Vector2(0f, 0.84f); klrt.anchorMax = new Vector2(1f, 1f);
         klrt.offsetMin = klrt.offsetMax = Vector2.zero;
         var kTxt = keyLbl.AddComponent<Text>();
-        kTxt.text = $"[{key}]"; kTxt.fontSize = 13; kTxt.color = new Color(0.55f, 0.68f, 0.88f);
+        kTxt.text = $"[{key}]"; kTxt.fontSize = 32; kTxt.color = new Color(0.55f, 0.68f, 0.88f);
         kTxt.alignment = TextAnchor.MiddleCenter;
         kTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
@@ -164,7 +164,7 @@ public class PortraitPanel : MonoBehaviour
         irrt.anchorMax        = new Vector2(0.5f, 0.55f);
         irrt.pivot            = new Vector2(0.5f, 0.5f);
         irrt.anchoredPosition = Vector2.zero;
-        irrt.sizeDelta        = new Vector2(66f, 66f);
+        irrt.sizeDelta        = new Vector2(110f, 110f);
 
         // ① 배경 원
         var bgCircle = new GameObject("BG");
@@ -195,7 +195,7 @@ public class PortraitPanel : MonoBehaviour
         var crt2 = centerGo.AddComponent<RectTransform>();
         crt2.anchorMin = crt2.anchorMax = new Vector2(0.5f, 0.5f);
         crt2.pivot     = new Vector2(0.5f, 0.5f);
-        crt2.sizeDelta = new Vector2(48f, 48f);
+        crt2.sizeDelta = new Vector2(78f, 78f);
         var cImg = centerGo.AddComponent<Image>();
         cImg.sprite = circleSprite;
         cImg.color  = new Color(0.07f, 0.08f, 0.13f);
@@ -206,7 +206,7 @@ public class PortraitPanel : MonoBehaviour
         var irt = iconGo.AddComponent<RectTransform>();
         irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 0.5f);
         irt.pivot     = new Vector2(0.5f, 0.5f);
-        irt.sizeDelta = new Vector2(36f, 36f);
+        irt.sizeDelta = new Vector2(62f, 62f);
         var iconImg = iconGo.AddComponent<Image>();
         iconImg.preserveAspect = true;
         iconImg.color = Color.white;
@@ -216,11 +216,11 @@ public class PortraitPanel : MonoBehaviour
         var nameGo = new GameObject($"SkillName{idx}");
         nameGo.transform.SetParent(slot.transform, false);
         var nrt = nameGo.AddComponent<RectTransform>();
-        nrt.anchorMin = new Vector2(0f, 0.00f); nrt.anchorMax = new Vector2(1f, 0.22f);
+        nrt.anchorMin = new Vector2(0f, 0.00f); nrt.anchorMax = new Vector2(1f, 0.28f);
         nrt.offsetMin = nrt.offsetMax = Vector2.zero;
         var nameTxt = nameGo.AddComponent<Text>();
         nameTxt.text      = "---";
-        nameTxt.fontSize  = 12;
+        nameTxt.fontSize  = 30;
         nameTxt.color     = new Color(0.80f, 0.84f, 0.92f);
         nameTxt.alignment = TextAnchor.MiddleCenter;
         nameTxt.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -437,8 +437,8 @@ public class PortraitPanel : MonoBehaviour
             return;
         }
 
-        // 일반 쿨타임 스킬
-        int cd    = skill.currentCooldown;
+        // 일반 쿨타임 스킬 (원소별 개별 쿨타임 스킬은 DisplayCooldown이 현재 원소 기준으로 오버라이드됨)
+        int cd    = skill.DisplayCooldown;
         int maxCd = skill.maxCooldown;
         float fillAmt = maxCd <= 0 ? 1f : 1f - (cd / (float)maxCd);
 

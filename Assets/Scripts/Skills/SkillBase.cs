@@ -10,11 +10,23 @@ public abstract class SkillBase : MonoBehaviour
     /// <summary>기본값: 즉시 발동 (미리보기 없음). 방향/이동 스킬은 오버라이드</summary>
     public virtual SkillPreviewType PreviewType => SkillPreviewType.None;
 
+    /// <summary>true이면 행동 슬롯을 소모하지 않음 (E 원소변경 등 예외 스킬)</summary>
+    public virtual bool IsFree => false;
+
+    /// <summary>
+    /// true  : 스킬 미리보기 중 같은 키 재입력 시 확정 (기본값)
+    /// false : 같은 키 재입력 시 취소 — Q 원소포설처럼 토글 방식인 경우
+    /// </summary>
+    public virtual bool SameKeyConfirms => true;
+
     [Header("Skill Info")]
     public string skillName;
     [TextArea] public string description;
     public int maxCooldown;
-    public int currentCooldown { get; private set; }
+    public int currentCooldown { get; protected set; }
+
+    /// <summary>UI에 표시할 쿨다운 값. 원소별 개별 쿨타임 스킬에서 오버라이드.</summary>
+    public virtual int DisplayCooldown => currentCooldown;
 
     public virtual bool CanUse()
     {
@@ -29,13 +41,19 @@ public abstract class SkillBase : MonoBehaviour
         OnUse(caster, targetPos);
         // 치트: 쿨타임 0이면 쿨타임 세팅 안 함
         if (CheatManager.Instance == null || !CheatManager.Instance.ZeroCooldown)
-            currentCooldown = maxCooldown;
+            ApplyCooldown();
+    }
+
+    /// <summary>Use() 성공 후 쿨타임 적용. 원소별 개별 쿨타임 스킬에서 오버라이드.</summary>
+    protected virtual void ApplyCooldown()
+    {
+        currentCooldown = maxCooldown;
     }
 
     protected abstract void OnUse(PlayerUnit caster, Vector2Int targetPos);
 
     // 이동 또는 행동 시 1 감소
-    public void ReduceCooldown(int amount)
+    public virtual void ReduceCooldown(int amount)
     {
         currentCooldown = Mathf.Max(0, currentCooldown - amount);
     }

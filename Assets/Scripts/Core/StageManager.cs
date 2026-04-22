@@ -44,43 +44,52 @@ public class StageManager : MonoBehaviour
         var player   = TurnManager.Instance.GetPlayer();
         var occupied = new HashSet<Vector2Int>();
 
+        const int boardSize = 8;
+        const int enemyMinDist = 4; // 적은 플레이어와 최소 4칸 거리
+
         if (keepPlayerPosition && player != null)
         {
             // 플레이어 현재 위치 유지 — 적/바닥 오브젝트만 랜덤 배치
             Vector2Int savedPos = player.GridPos;
             occupied.Add(savedPos);
-            var positions = PickRandomPositions(enemyTypes.Count + floorTypes.Count, occupied);
+
+            var enemyPos = PickEnemyPositions(enemyTypes.Count, savedPos, occupied, enemyMinDist, boardSize);
+            var floorPos = PickRandomPositions(floorTypes.Count, occupied, boardSize);
 
             BoardManager.Instance.GetTile(savedPos)?.ClearUnit();
             player.PlaceOnBoard(savedPos);
 
             for (int i = 0; i < enemyTypes.Count; i++)
-                SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), positions[i]);
+                SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), enemyPos[i]);
 
             if (FloorObjectManager.Instance != null)
                 for (int i = 0; i < floorTypes.Count; i++)
-                    FloorObjectManager.Instance.Spawn(floorTypes[i], positions[enemyTypes.Count + i]);
+                    FloorObjectManager.Instance.Spawn(floorTypes[i], floorPos[i]);
         }
         else
         {
-            // 플레이어 포함 전부 랜덤 배치
-            var positions = PickRandomPositions(1 + enemyTypes.Count + floorTypes.Count, occupied);
+            // 플레이어: 바깥에서 2번째 라인(두 번째 링) 중 랜덤 배치
+            Vector2Int playerPos = PickSecondRingPosition(occupied, boardSize);
+            occupied.Add(playerPos);
+
+            // 적: 플레이어와 최소 4칸 거리
+            var enemyPos = PickEnemyPositions(enemyTypes.Count, playerPos, occupied, enemyMinDist, boardSize);
+
+            // 바닥 오브젝트: 나머지 빈 칸 중 랜덤
+            var floorPos = PickRandomPositions(floorTypes.Count, occupied, boardSize);
 
             if (player != null)
             {
                 BoardManager.Instance.GetTile(player.GridPos)?.ClearUnit();
-                player.PlaceOnBoard(positions[0]);
+                player.PlaceOnBoard(playerPos);
             }
 
             for (int i = 0; i < enemyTypes.Count; i++)
-                SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), positions[1 + i]);
+                SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), enemyPos[i]);
 
             if (FloorObjectManager.Instance != null)
-            {
-                int offset = 1 + enemyTypes.Count;
                 for (int i = 0; i < floorTypes.Count; i++)
-                    FloorObjectManager.Instance.Spawn(floorTypes[i], positions[offset + i]);
-            }
+                    FloorObjectManager.Instance.Spawn(floorTypes[i], floorPos[i]);
         }
 
         // 배경 이미지 적용
@@ -98,15 +107,88 @@ public class StageManager : MonoBehaviour
     }
 
     // ── 랜덤 위치 생성 헬퍼 ──────────────────────────────────────────────
+
+    /// <summary>보드 안에서 아무 빈 칸 count개 랜덤 선택</summary>
     private static List<Vector2Int> PickRandomPositions(int count, HashSet<Vector2Int> occupied, int boardSize = 8)
     {
         var result = new List<Vector2Int>();
-        while (result.Count < count)
+        int safety = 0;
+        while (result.Count < count && safety++ < 10000)
         {
             var pos = new Vector2Int(Random.Range(0, boardSize), Random.Range(0, boardSize));
             if (occupied.Add(pos))
                 result.Add(pos);
         }
+        return result;
+    }
+
+    /// <summary>
+    /// 바깥에서 2번째 링(second ring) 위에서 빈 칸 1개 랜덤 선택
+    /// 8×8 기준: x 또는 y가 1 또는 6인 테두리 링
+    /// </summary>
+    private static Vector2Int PickSecondRingPosition(HashSet<Vector2Int> occupied, int boardSize = 8)
+    {
+        int inner = 1;                // 안쪽 인덱스
+        int outer = boardSize - 2;   // 바깥쪽 인덱스 (8×8이면 6)
+
+        var candidates = new List<Vector2Int>();
+        for (int x = inner; x <= outer; x++)
+        for (int y = inner; y <= outer; y++)
+        {
+            // 두 번째 링: 네 변 중 하나에 해당 (distFromEdge == 1)
+            bool onRing = x == inner || x == outer || y == inner || y == outer;
+            if (onRing && !occupied.Contains(new Vector2Int(x, y)))
+                candidates.Add(new Vector2Int(x, y));
+        }
+
+        if (candidates.Count == 0)
+        {
+            // 폴백: 전체에서 랜덤
+            var pos = new Vector2Int(Random.Range(0, boardSize), Random.Range(0, boardSize));
+            return pos;
+        }
+
+        return candidates[Random.Range(0, candidates.Count)];
+    }
+
+    /// <summary>
+    /// 플레이어로부터 최소 minDist 이상 떨어진 빈 칸 count개 선택.
+    /// 충분한 자리가 없으면 거리 조건 완화.
+    /// </summary>
+    private static List<Vector2Int> PickEnemyPositions(
+        int count, Vector2Int playerPos, HashSet<Vector2Int> occupied,
+        int minDist = 4, int boardSize = 8)
+    {
+        var result = new List<Vector2Int>();
+
+        // 1차 시도: minDist 이상인 칸 수집 후 셔플
+        var farCandidates = new List<Vector2Int>();
+        for (int x = 0; x < boardSize; x++)
+        for (int y = 0; y < boardSize; y++)
+        {
+            var p = new Vector2Int(x, y);
+            int dist = Mathf.Abs(p.x - playerPos.x) + Mathf.Abs(p.y - playerPos.y);
+            if (dist >= minDist && !occupied.Contains(p))
+                farCandidates.Add(p);
+        }
+
+        // 셔플 (Fisher-Yates)
+        for (int i = farCandidates.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (farCandidates[i], farCandidates[j]) = (farCandidates[j], farCandidates[i]);
+        }
+
+        foreach (var p in farCandidates)
+        {
+            if (result.Count >= count) break;
+            if (occupied.Add(p)) result.Add(p);
+        }
+
+        // 부족하면 거리 무관 폴백
+        if (result.Count < count)
+            result.AddRange(PickRandomPositions(count - result.Count, occupied, boardSize));
+
         return result;
     }
 

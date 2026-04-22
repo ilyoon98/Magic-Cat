@@ -4,17 +4,17 @@ using System.Collections.Generic;
 /// <summary>
 /// 적 유닛 AI
 ///
-/// [공격 흐름]
-///  이동 턴: 사정거리 진입 → willAttackNextTurn = true, 빨간 타일 표시, 이동 불가
-///  공격 턴: willAttackNextTurn이 true이면 무조건 공격 실행 (플레이어 위치 무관)
-///           사정거리 안이면 실제 데미지, 밖이면 공격 허공 (턴은 소모)
+/// [AI 턴 행동 우선순위] — 턴마다 1가지만 수행
+///   1. 공격 준비 완료(willAttackNextTurn=true) → 공격 실행 후 턴 종료
+///   2. 플레이어가 사거리 안 → 공격 준비 (이동 없음) 후 턴 종료
+///   3. 플레이어가 사거리 밖 → 1칸 이동 후 턴 종료
 ///
-/// [보스]
-///  3턴 주기로 충전 → 다음 턴 2배 데미지 (사거리는 Excel 그대로)
+/// [보스 추가 패턴]
+///   3턴 주기로 충전 → 다음 턴 2배 데미지 강화 공격
 /// </summary>
 public class EnemyUnit : Unit
 {
-    [HideInInspector] public int moveSpeed = 1;
+    [HideInInspector] public int moveSpeed = 1; // 현재 AI에서 1칸만 이동하므로 참고용
 
     private bool willAttackNextTurn = false;
 
@@ -42,84 +42,7 @@ public class EnemyUnit : Unit
     // ── 일반 적 AI ────────────────────────────────────────────────────────
     private void ExecuteNormalTurn(PlayerUnit player)
     {
-        // willAttackNextTurn이면 무조건 공격 (플레이어가 도망가도 실행)
-        if (willAttackNextTurn)
-        {
-            ClearWarning();
-            willAttackNextTurn = false;
-            GameUI.Instance?.ShowNotify($"⚠ {name} 공격!", 1.0f);
-
-            Vector3 targetPos = BoardManager.Instance.GridToWorld(player.GridPos);
-            EffectManager.Instance?.PlayAttack(targetPos); // 공격 이펙트는 항상
-
-            if (IsInAttackRange(player))
-                Attack(player); // 사정거리 안이면 데미지, 밖이면 허공
-
-            return; // 공격 후 턴 종료
-        }
-
-        // 이동
-        bool movedIntoRange = false;
-        for (int step = 0; step < moveSpeed; step++)
-        {
-            Vector2Int? next = BFSNextStep(GridPos, player.GridPos);
-            if (next == null) break;
-            Tile tile = BoardManager.Instance.GetTile(next.Value);
-            if (tile == null || tile.IsOccupied) break;
-            PlaceOnBoard(next.Value);
-
-            // 이동 중 사정거리 진입 → 즉시 멈추고 공격 예고
-            if (IsInAttackRange(player))
-            {
-                movedIntoRange = true;
-                break;
-            }
-        }
-
-        // 이동 후 사정거리 확인 → 다음 턴 공격 예고 세팅
-        if (movedIntoRange || IsInAttackRange(player))
-            willAttackNextTurn = true;
-    }
-
-    // ── 보스 AI ───────────────────────────────────────────────────────────
-    private void ExecuteBossTurn(PlayerUnit player)
-    {
-        bossTurnCount++;
-
-        // ① 충전 완료 → 강화 공격 (사거리는 Excel 값 그대로, 데미지만 2배)
-        if (bossCharging)
-        {
-            bossCharging = false;
-            ClearWarning();
-            GameUI.Instance?.ShowNotify($"💥 {name} 강화 공격!", 1.5f);
-
-            Vector3 targetPos = BoardManager.Instance.GridToWorld(player.GridPos);
-            EffectManager.Instance?.PlayExplosion(targetPos);
-
-            if (IsInAttackRange(player))
-                player.TakeDamage(attackDamage * 2);
-
-            return;
-        }
-
-        // ② 3턴마다 충전 시작 (이동도 1칸)
-        if (bossTurnCount % 3 == 0)
-        {
-            bossCharging = true;
-            willAttackNextTurn = false;
-            ClearWarning();
-            GameUI.Instance?.ShowNotify($"⚡ {name} 충전 중...", 1.5f);
-
-            Vector2Int? next = BFSNextStep(GridPos, player.GridPos);
-            if (next != null)
-            {
-                var tile = BoardManager.Instance.GetTile(next.Value);
-                if (tile != null && !tile.IsOccupied) PlaceOnBoard(next.Value);
-            }
-            return;
-        }
-
-        // ③ 일반 행동 (일반 적과 동일)
+        // ① 공격 준비 완료 → 공격 실행
         if (willAttackNextTurn)
         {
             ClearWarning();
@@ -134,18 +57,87 @@ public class EnemyUnit : Unit
             return;
         }
 
-        for (int step = 0; step < moveSpeed; step++)
+        // ② 플레이어가 사거리 안 → 공격 준비 (이동 없음)
+        if (IsInAttackRange(player))
         {
-            Vector2Int? next = BFSNextStep(GridPos, player.GridPos);
-            if (next == null) break;
+            willAttackNextTurn = true;
+            return;
+        }
+
+        // ③ 플레이어가 사거리 밖 → 1칸 이동
+        Vector2Int? next = BFSNextStep(GridPos, player.GridPos);
+        if (next != null)
+        {
             Tile tile = BoardManager.Instance.GetTile(next.Value);
-            if (tile == null || tile.IsOccupied) break;
-            PlaceOnBoard(next.Value);
-            if (IsInAttackRange(player)) break;
+            if (tile != null && !tile.IsOccupied)
+                PlaceOnBoard(next.Value);
+        }
+    }
+
+    // ── 보스 AI ───────────────────────────────────────────────────────────
+    private void ExecuteBossTurn(PlayerUnit player)
+    {
+        bossTurnCount++;
+
+        // ① 충전 완료 → 강화 공격 (2배 데미지)
+        if (bossCharging)
+        {
+            bossCharging = false;
+            ClearWarning();
+            GameUI.Instance?.ShowNotify($"💥 {name} 강화 공격!", 1.5f);
+
+            Vector3 targetPos = BoardManager.Instance.GridToWorld(player.GridPos);
+            EffectManager.Instance?.PlayExplosion(targetPos);
+
+            if (IsInAttackRange(player))
+                player.TakeDamage(attackDamage * 2);
+            return;
+        }
+
+        // ② 3턴마다 충전 시작 + 1칸 이동
+        if (bossTurnCount % 3 == 0)
+        {
+            bossCharging       = true;
+            willAttackNextTurn = false;
+            ClearWarning();
+            GameUI.Instance?.ShowNotify($"⚡ {name} 충전 중...", 1.5f);
+
+            Vector2Int? next = BFSNextStep(GridPos, player.GridPos);
+            if (next != null)
+            {
+                var tile = BoardManager.Instance.GetTile(next.Value);
+                if (tile != null && !tile.IsOccupied) PlaceOnBoard(next.Value);
+            }
+            return;
+        }
+
+        // ③ 일반 행동 — 새 AI 우선순위 적용
+        if (willAttackNextTurn)
+        {
+            ClearWarning();
+            willAttackNextTurn = false;
+            GameUI.Instance?.ShowNotify($"⚠ {name} 공격!", 1.0f);
+
+            Vector3 targetPos = BoardManager.Instance.GridToWorld(player.GridPos);
+            EffectManager.Instance?.PlayAttack(targetPos);
+
+            if (IsInAttackRange(player))
+                Attack(player);
+            return;
         }
 
         if (IsInAttackRange(player))
+        {
             willAttackNextTurn = true;
+            return;
+        }
+
+        Vector2Int? next2 = BFSNextStep(GridPos, player.GridPos);
+        if (next2 != null)
+        {
+            var tile = BoardManager.Instance.GetTile(next2.Value);
+            if (tile != null && !tile.IsOccupied) PlaceOnBoard(next2.Value);
+        }
     }
 
     // ── 공격 예고 하이라이트 ──────────────────────────────────────────────
@@ -154,7 +146,6 @@ public class EnemyUnit : Unit
         ClearWarning();
         if (!willAttackNextTurn && !bossCharging) return;
 
-        // 사거리 내 타일 빨간색 표시 (보스도 Excel 값 그대로)
         var tiles = BoardManager.Instance.GetTilesInRange(GridPos, attackRange);
         foreach (var tile in tiles)
         {
@@ -192,6 +183,7 @@ public class EnemyUnit : Unit
                 if (!BoardManager.Instance.IsInBounds(next)) continue;
 
                 var tile = BoardManager.Instance.GetTile(next);
+                if (tile.IsWall) continue;                         // 벽 타일 우회
                 if (tile.IsOccupied && next != to) continue;
 
                 visited[next] = cur;
@@ -209,10 +201,9 @@ public class EnemyUnit : Unit
         return null;
     }
 
-    // ── 공격 오버라이드 — 킬러 이름 기록 ───────────────────────────────
+    // ── 공격 오버라이드 — 킬러 이름 기록 ────────────────────────────────
     public override void Attack(Unit target)
     {
-        // 게임오버 씬 선택을 위해 공격 주체를 기록
         GameManager.LastKillerName = gameObject.name.Replace(" ", "");
         base.Attack(target);
     }

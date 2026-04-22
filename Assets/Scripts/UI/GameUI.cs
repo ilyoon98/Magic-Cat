@@ -213,17 +213,24 @@ public class GameUI : MonoBehaviour
                          && GameManager.Instance?.CurrentState == GameManager.GameState.PlayerTurn;
         var player = TurnManager.Instance.GetPlayer();
 
-        turnText.text = isPlayerTurn
-            ? $"[ 플레이어 턴  {TurnManager.Instance.TurnCount} ]"
-            : "[ 적 턴 ... ]";
         turnText.color = isPlayerTurn ? Color.white : new Color(1f, 0.45f, 0.45f);
 
         if (player != null)
         {
-            bool acted = player.HasActedThisTurn;
-            SetActionText(actionAttackText, "⚔ 공격", acted);
-            SetActionText(actionMoveText,   "👣 이동", acted);
-            SetActionText(actionSkillText,  "✦ 스킬",  acted);
+            // 턴당 2행동 — 남은 행동 수 + 각 종류별 사용 여부 표시
+            turnText.text = isPlayerTurn
+                ? $"[ 플레이어 턴  {TurnManager.Instance.TurnCount} ]  행동 {player.ActionsUsed}/2"
+                : "[ 적 턴 ... ]";
+
+            SetActionText(actionAttackText, "⚔ 공격", !player.CanAttack);
+            SetActionText(actionMoveText,   "👣 이동", !player.CanMove);
+            SetActionText(actionSkillText,  "✦ 스킬",  !player.CanUseSkill);
+        }
+        else
+        {
+            turnText.text = isPlayerTurn
+                ? $"[ 플레이어 턴  {TurnManager.Instance.TurnCount} ]"
+                : "[ 적 턴 ... ]";
         }
 
         endTurnButton.interactable = isPlayerTurn;

@@ -2,9 +2,17 @@ using UnityEngine;
 
 /// <summary>
 /// 1스테이지 — 원소마법사
-/// 평타: 현재 원소 속성으로 1칸 공격
-/// 스킬1: 원소변경 (불→땅→나무→물→불)
-/// 스킬2: 원소집중 (강력한 단일 공격, 쿨타임 김)
+///
+/// [행동 구조]
+///   평타: 현재 원소 속성으로 직선 발사. 대상 없어도 공격 발사.
+///   Q   : 원소포설 — 원하는 빈 칸에 원소를 깔기. 쿨타임 3. (Q 재입력으로 취소)
+///   E   : 원소변경 — 불→땅→나무→물→불 순환. 행동 소모 없음(예외)
+///
+/// [원소 포설 효과] — 유닛이 밟는 순간 발동 후 사라짐
+///   불  → 화상(DoT 2턴)
+///   땅  → 스턴(1턴 이동 불가)
+///   나무 → 속박(2턴 이동 불가)
+///   물  → 전도(다음 원소 효과 2배)
 /// </summary>
 public class ElementalPlayerUnit : PlayerUnit
 {
@@ -12,7 +20,7 @@ public class ElementalPlayerUnit : PlayerUnit
 
     public Element CurrentElement { get; private set; } = Element.Fire;
 
-    // 원소별 투사체 색상
+    // 투사체 색상 — 원소별
     protected override Color AttackColor => CurrentElement switch
     {
         Element.Fire  => new Color(1f,  0.4f, 0.1f),
@@ -22,17 +30,16 @@ public class ElementalPlayerUnit : PlayerUnit
         _             => Color.white
     };
 
+    protected override float AttackSpeed => 16f;
+
     protected override void Awake()
     {
         base.Awake();
-        // 스킬 컴포넌트 연결
-        skill1 = gameObject.AddComponent<Skill_ElementChange>();
-        skill2 = gameObject.AddComponent<Skill_ElementFocus>();
+        skill1 = gameObject.AddComponent<Skill_ElementPlace>();   // Q
+        skill2 = gameObject.AddComponent<Skill_ElementChange>();  // E (free)
     }
 
-    /// <summary>
-    /// 원소 속성 평타 — 원소에 따라 추가 효과 적용
-    /// </summary>
+    // ── 평타 데미지/이펙트 — 원소 비주얼 적용 (상태이상은 바닥 원소로) ──────
     public override void Attack(Unit target)
     {
         if (target == null || !target.IsAlive) return;
@@ -50,48 +57,10 @@ public class ElementalPlayerUnit : PlayerUnit
             }
         }
 
-        target.TakeDamage(GetElementalDamage());
-        ApplyElementEffect(target);
+        target.TakeDamage(attackDamage);
     }
 
-    private int GetElementalDamage()
-    {
-        return CurrentElement switch
-        {
-            Element.Fire  => attackDamage - 1, // 낮음
-            Element.Earth => attackDamage + 2, // 높음
-            Element.Wood  => attackDamage - 1, // 낮음
-            Element.Water => attackDamage,     // 보통
-            _             => attackDamage
-        };
-    }
-
-    private void ApplyElementEffect(Unit target)
-    {
-        switch (CurrentElement)
-        {
-            case Element.Fire:
-                // 지속 화상 (DoT)
-                target.GetComponent<StatusEffectHandler>()?.ApplyBurn(2, 3); // 2데미지 3턴
-                Debug.Log($"[원소] 화상 적용!");
-                break;
-            case Element.Earth:
-                // 추가 효과 없음 (높은 데미지만)
-                Debug.Log($"[원소] 대지 공격 (고데미지)");
-                break;
-            case Element.Wood:
-                // HP 회복
-                Heal(2);
-                Debug.Log($"[원소] 나무 공격 + HP 회복");
-                break;
-            case Element.Water:
-                // 적 이동 봉쇄 1턴
-                target.GetComponent<StatusEffectHandler>()?.ApplyImmobilize(1);
-                Debug.Log($"[원소] 물 공격 + 이동 봉쇄");
-                break;
-        }
-    }
-
+    // ── 원소 순환 ─────────────────────────────────────────────────────────
     public void CycleElement()
     {
         CurrentElement = CurrentElement switch

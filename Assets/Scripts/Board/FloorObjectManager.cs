@@ -19,6 +19,27 @@ public class FloorObjectManager : MonoBehaviour
         Instance = this;
     }
 
+    /// <summary>원소 바닥 타일 스폰</summary>
+    public FloorObject SpawnElement(FloorObject.ElementType element, Vector2Int pos)
+    {
+        if (objects.ContainsKey(pos)) Remove(objects[pos]);
+
+        var go  = new GameObject($"ElemFloor_{element}_{pos.x}_{pos.y}");
+        var obj = go.AddComponent<FloorObject>();
+        obj.InitElement(element, pos);
+
+        Vector3 worldPos = BoardManager.Instance.GridToWorld(pos);
+        worldPos.z = -0.5f;
+        go.transform.position   = worldPos;
+        // 땅 원소 벽은 타일 전체를 덮도록 크게, 나머지는 작게
+        go.transform.localScale = element == FloorObject.ElementType.Earth
+            ? Vector3.one * 0.95f
+            : Vector3.one * 0.6f;
+
+        objects[pos] = obj;
+        return obj;
+    }
+
     /// <summary>지정 위치에 오브젝트 스폰</summary>
     public FloorObject Spawn(FloorObject.ObjectType type, Vector2Int pos)
     {
@@ -46,11 +67,20 @@ public class FloorObjectManager : MonoBehaviour
         Destroy(obj.gameObject);
     }
 
-    /// <summary>모든 오브젝트 제거 (맵 전환 시)</summary>
+    /// <summary>모든 오브젝트 제거 (맵 전환 시) — 땅 원소 벽 플래그도 해제</summary>
     public void ClearAll()
     {
         foreach (var obj in new List<FloorObject>(objects.Values))
-            if (obj != null) Destroy(obj.gameObject);
+        {
+            if (obj == null) continue;
+            // 땅 원소 벽 플래그를 먼저 해제 (OnDestroy보다 명시적으로)
+            if (obj.Type == FloorObject.ObjectType.Element
+                && obj.Element == FloorObject.ElementType.Earth)
+            {
+                BoardManager.Instance?.GetTile(obj.GridPos)?.SetWall(false);
+            }
+            Destroy(obj.gameObject);
+        }
         objects.Clear();
     }
 
