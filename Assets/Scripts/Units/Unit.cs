@@ -181,6 +181,8 @@ public abstract class Unit : MonoBehaviour
     public bool IsInAttackRange(Unit target)
     {
         int dist = Mathf.Abs(GridPos.x - target.GridPos.x) + Mathf.Abs(GridPos.y - target.GridPos.y);
-        return dist <= attackRange;
+        if (dist > attackRange) return false;
+        // 같은 행/열이면 벽 관통 여부 확인 (땅 원소 벽 등)
+        return GridUtil.HasClearLine(GridPos, target.GridPos);
     }
 }

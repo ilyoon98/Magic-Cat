@@ -112,7 +112,10 @@ public abstract class PlayerUnit : Unit
 
         if (!CanUseSkill) return false;
 
-        skill.Use(this, targetPos);
+        // OnUse가 false 반환(타겟 무효 등)이면 행동 소모 없이 실패
+        bool success = skill.Use(this, targetPos);
+        if (!success) return false;
+
         hasUsedSkillThisTurn = true;
         ActionsUsed++;
         skill1?.ReduceCooldown(1);

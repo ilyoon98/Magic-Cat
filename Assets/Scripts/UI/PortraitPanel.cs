@@ -241,8 +241,8 @@ public class PortraitPanel : MonoBehaviour
         frt.anchorMin        = new Vector2(1f, 0f);
         frt.anchorMax        = new Vector2(1f, 1f);
         frt.pivot            = new Vector2(1f, 0.5f);
-        frt.anchoredPosition = new Vector2(-8f, 0f);
-        frt.sizeDelta        = new Vector2(460f, 0f);
+        frt.anchoredPosition = new Vector2(-58f, 0f);  // 좌측으로 50 이동 (-8 → -58)
+        frt.sizeDelta        = new Vector2(460f, -56f); // 상하로 56 줄임 (pivot 중앙이므로 각 28씩)
         frame.AddComponent<Image>().color = new Color(0.04f, 0.05f, 0.08f, 0.85f);
 
         bigPortraitImage = new GameObject("BigPortraitImage").AddComponent<Image>();

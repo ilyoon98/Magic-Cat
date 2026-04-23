@@ -54,17 +54,25 @@ public class Skill_ElementPlace : SkillBase
             _elementCooldowns[i] = Mathf.Max(0, _elementCooldowns[i] - amount);
     }
 
-    protected override void OnUse(PlayerUnit caster, Vector2Int targetPos)
+    protected override bool OnUse(PlayerUnit caster, Vector2Int targetPos)
     {
         var elemental = caster as ElementalPlayerUnit;
-        if (elemental == null) return;
+        if (elemental == null) return false;
 
-        // 대상 타일 유효성 검사 — 빈 칸이어야 함
+        // 대상 타일 유효성 검사 — 비어 있는 칸이어야 함 (벽·점유 불가)
         var tile = BoardManager.Instance.GetTile(targetPos);
-        if (tile == null || tile.IsOccupied)
+        if (tile == null || tile.IsOccupied || tile.IsWall)
         {
             GameUI.Instance?.ShowNotify("빈 칸을 선택하세요", 0.7f);
-            return;
+            return false;
+        }
+
+        // 함정·하트 등 기존 바닥 오브젝트 위에는 설치 불가
+        var existing = FloorObjectManager.Instance?.GetAt(targetPos);
+        if (existing != null)
+        {
+            GameUI.Instance?.ShowNotify("이미 바닥 오브젝트가 있는 칸입니다", 0.7f);
+            return false;
         }
 
         // ElementalPlayerUnit.Element → FloorObject.ElementType (값 동일)
@@ -74,6 +82,7 @@ public class Skill_ElementPlace : SkillBase
         string elemName = GetElementLabel(elemental.CurrentElement);
         GameUI.Instance?.ShowNotify(elemName + " 원소 포설!", 0.9f);
         Debug.Log($"[원소포설] {targetPos}에 {elemental.CurrentElement} 배치");
+        return true;
     }
 
     private static string GetElementLabel(ElementalPlayerUnit.Element e)

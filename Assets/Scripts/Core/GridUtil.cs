@@ -17,7 +17,8 @@ public static class GridUtil
     }
 
     /// <summary>
-    /// start에서 dir 방향으로 직선 탐색 — 첫 번째 적(EnemyUnit) 반환
+    /// start에서 dir 방향으로 직선 탐색 — 첫 번째 적(EnemyUnit) 반환.
+    /// 벽(IsWall) 타일을 만나면 그 너머는 탐색하지 않고 null 반환.
     /// </summary>
     public static EnemyUnit FindFirstEnemyInDir(Vector2Int start, Vector2Int dir)
     {
@@ -25,7 +26,9 @@ public static class GridUtil
         while (BoardManager.Instance.IsInBounds(pos))
         {
             var tile = BoardManager.Instance.GetTile(pos);
-            if (tile != null && tile.IsOccupied && tile.OccupiedUnit is EnemyUnit e)
+            if (tile == null) break;
+            if (tile.IsWall) return null; // 벽에 막힘 — 그 너머 탐색 중단
+            if (tile.IsOccupied && tile.OccupiedUnit is EnemyUnit e)
                 return e;
             pos += dir;
         }
@@ -33,16 +36,44 @@ public static class GridUtil
     }
 
     /// <summary>
-    /// start에서 dir 방향으로 보드 내 마지막 타일 좌표 반환 (보드 끝)
+    /// start에서 dir 방향으로 보드 내 마지막 타일 좌표 반환.
+    /// 벽(IsWall) 타일을 만나면 그 벽 위치에서 멈춤.
     /// </summary>
     public static Vector2Int GetFarEdge(Vector2Int start, Vector2Int dir)
     {
         var pos = start + dir;
         if (!BoardManager.Instance.IsInBounds(pos))
-            return start; // 이미 끝
+            return start;
 
-        while (BoardManager.Instance.IsInBounds(pos + dir))
+        while (BoardManager.Instance.IsInBounds(pos))
+        {
+            var tile = BoardManager.Instance.GetTile(pos);
+            if (tile != null && tile.IsWall) return pos; // 벽에서 멈춤
+            if (!BoardManager.Instance.IsInBounds(pos + dir)) return pos; // 보드 끝
             pos += dir;
+        }
         return pos;
+    }
+
+    /// <summary>
+    /// from → to 직선(cardinal 방향) 경로에 벽 타일이 없는지 확인.
+    /// 같은 행/열이 아닌 경우 항상 true 반환.
+    /// </summary>
+    public static bool HasClearLine(Vector2Int from, Vector2Int to)
+    {
+        if (from == to) return true;
+        Vector2Int delta = to - from;
+        // 같은 행 또는 같은 열인 경우만 차단 검사
+        if (delta.x != 0 && delta.y != 0) return true;
+
+        Vector2Int dir = SnapToCardinal(delta);
+        Vector2Int pos = from + dir;
+        while (pos != to)
+        {
+            var tile = BoardManager.Instance.GetTile(pos);
+            if (tile != null && tile.IsWall) return false;
+            pos += dir;
+        }
+        return true;
     }
 }

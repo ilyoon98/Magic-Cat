@@ -13,7 +13,7 @@ public class Skill_BlackMagic : SkillBase
         maxCooldown = 0;
     }
 
-    protected override void OnUse(PlayerUnit caster, Vector2Int targetPos)
+    protected override bool OnUse(PlayerUnit caster, Vector2Int targetPos)
     {
         if (caster is BlackWhitePlayerUnit bw)
             bw.SetMode(BlackWhitePlayerUnit.Mode.Black);
@@ -21,5 +21,6 @@ public class Skill_BlackMagic : SkillBase
         // 전환 이펙트 (어두운 불꽃)
         EffectManager.Instance?.PlayFireHit(caster.transform.position);
         GameUI.Instance?.ShowNotify("⬛ 흑마법 모드", 1.0f);
+        return true;
     }
 }
