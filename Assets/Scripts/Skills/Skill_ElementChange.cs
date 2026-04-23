@@ -16,7 +16,7 @@ public class Skill_ElementChange : SkillBase
         maxCooldown = 0;
     }
 
-    protected override void OnUse(PlayerUnit caster, Vector2Int targetPos)
+    protected override bool OnUse(PlayerUnit caster, Vector2Int targetPos)
     {
         if (caster is ElementalPlayerUnit elemental)
         {
@@ -24,6 +24,7 @@ public class Skill_ElementChange : SkillBase
             string elemLabel = GetElementLabel(elemental.CurrentElement);
             GameUI.Instance?.ShowNotify($"원소 변경: {elemLabel}", 0.8f);
         }
+        return true;
     }
 
     private static string GetElementLabel(ElementalPlayerUnit.Element e)

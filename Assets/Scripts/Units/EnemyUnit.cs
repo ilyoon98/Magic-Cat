@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
@@ -11,19 +12,26 @@ using System.Collections.Generic;
 ///
 /// [보스 추가 패턴]
 ///   3턴 주기로 충전 → 다음 턴 2배 데미지 강화 공격
+///
+/// 서브클래스(GoblinUnit, CentaurusUnit 등)가 protected 멤버를 재사용할 수 있도록
+/// 주요 필드/메서드를 protected 또는 virtual로 선언.
 /// </summary>
 public class EnemyUnit : Unit
 {
-    [HideInInspector] public int moveSpeed = 1; // 현재 AI에서 1칸만 이동하므로 참고용
+    [HideInInspector] public int moveSpeed = 1;
 
-    private bool willAttackNextTurn = false;
+    protected bool willAttackNextTurn = false;
 
     // ── 보스 전용 ────────────────────────────────────────────────────────
     private int  bossTurnCount = 0;
     private bool bossCharging  = false;
 
     // ── 공격 예고 하이라이트 ──────────────────────────────────────────────
-    private readonly List<Vector2Int> warningTiles = new List<Vector2Int>();
+    protected readonly List<Vector2Int> warningTiles = new List<Vector2Int>();
+
+    // ── 스프라이트 방향 ──────────────────────────────────────────────────
+    private int  _facingDir     = 1;    // 1 = 오른쪽, -1 = 왼쪽
+    private bool _initialPlaced = false;
 
     protected override void Awake() { base.Awake(); }
 
@@ -32,7 +40,7 @@ public class EnemyUnit : Unit
         GetComponent<EnemyHPDisplay>()?.UpdateDisplay();
     }
 
-    public void ExecuteTurn(PlayerUnit player)
+    public virtual void ExecuteTurn(PlayerUnit player)
     {
         if (!IsAlive || player == null) return;
         if (IsBoss) ExecuteBossTurn(player);
@@ -40,7 +48,7 @@ public class EnemyUnit : Unit
     }
 
     // ── 일반 적 AI ────────────────────────────────────────────────────────
-    private void ExecuteNormalTurn(PlayerUnit player)
+    protected void ExecuteNormalTurn(PlayerUnit player)
     {
         // ① 공격 준비 완료 → 공격 실행
         if (willAttackNextTurn)
@@ -49,11 +57,13 @@ public class EnemyUnit : Unit
             willAttackNextTurn = false;
             GameUI.Instance?.ShowNotify($"⚠ {name} 공격!", 1.0f);
 
-            Vector3 targetPos = BoardManager.Instance.GridToWorld(player.GridPos);
-            EffectManager.Instance?.PlayAttack(targetPos);
-
+            // 사거리 확인 후 범위 안에 있을 때만 이펙트·데미지 처리
             if (IsInAttackRange(player))
+            {
+                Vector3 targetPos = BoardManager.Instance.GridToWorld(player.GridPos);
+                EffectManager.Instance?.PlayAttack(targetPos);
                 Attack(player);
+            }
             return;
         }
 
@@ -69,7 +79,7 @@ public class EnemyUnit : Unit
         if (next != null)
         {
             Tile tile = BoardManager.Instance.GetTile(next.Value);
-            if (tile != null && !tile.IsOccupied)
+            if (tile != null && !tile.IsOccupied && !tile.IsWall)
                 PlaceOnBoard(next.Value);
         }
     }
@@ -106,23 +116,24 @@ public class EnemyUnit : Unit
             if (next != null)
             {
                 var tile = BoardManager.Instance.GetTile(next.Value);
-                if (tile != null && !tile.IsOccupied) PlaceOnBoard(next.Value);
+                if (tile != null && !tile.IsOccupied && !tile.IsWall) PlaceOnBoard(next.Value);
             }
             return;
         }
 
-        // ③ 일반 행동 — 새 AI 우선순위 적용
+        // ③ 일반 행동
         if (willAttackNextTurn)
         {
             ClearWarning();
             willAttackNextTurn = false;
             GameUI.Instance?.ShowNotify($"⚠ {name} 공격!", 1.0f);
 
-            Vector3 targetPos = BoardManager.Instance.GridToWorld(player.GridPos);
-            EffectManager.Instance?.PlayAttack(targetPos);
-
             if (IsInAttackRange(player))
+            {
+                Vector3 targetPos = BoardManager.Instance.GridToWorld(player.GridPos);
+                EffectManager.Instance?.PlayAttack(targetPos);
                 Attack(player);
+            }
             return;
         }
 
@@ -136,33 +147,64 @@ public class EnemyUnit : Unit
         if (next2 != null)
         {
             var tile = BoardManager.Instance.GetTile(next2.Value);
-            if (tile != null && !tile.IsOccupied) PlaceOnBoard(next2.Value);
+            if (tile != null && !tile.IsOccupied && !tile.IsWall) PlaceOnBoard(next2.Value);
         }
     }
 
     // ── 공격 예고 하이라이트 ──────────────────────────────────────────────
-    public void RefreshWarning()
+    public virtual void RefreshWarning()
     {
         ClearWarning();
         if (!willAttackNextTurn && !bossCharging) return;
 
-        var tiles = BoardManager.Instance.GetTilesInRange(GridPos, attackRange);
-        foreach (var tile in tiles)
+        // 4방향 직선으로 attackRange칸까지 표시 (실제 공격 범위와 동일한 직선 방향)
+        Vector2Int[] dirs = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
+        foreach (var dir in dirs)
         {
-            tile.SetHighlight(Tile.HighlightType.Danger);
-            warningTiles.Add(tile.GridPos);
+            for (int i = 1; i <= attackRange; i++)
+            {
+                Vector2Int pos = GridPos + dir * i;
+                Tile tile = BoardManager.Instance.GetTile(pos);
+                if (tile == null || tile.IsWall) break;
+                tile.SetHighlight(Tile.HighlightType.Danger);
+                warningTiles.Add(pos);
+                if (tile.IsOccupied) break; // 유닛에 막히면 그 너머는 표시 안 함
+            }
         }
     }
 
-    public void ClearWarning()
+    public virtual void ClearWarning()
     {
         foreach (var pos in warningTiles)
             BoardManager.Instance.GetTile(pos)?.SetHighlight(Tile.HighlightType.None);
         warningTiles.Clear();
     }
 
+    // ── 스프라이트 방향 ──────────────────────────────────────────────────
+    /// <summary>
+    /// 이동 방향에 따라 스프라이트를 좌우 반전한다.
+    /// 상하 이동 시에는 마지막 수평 방향을 유지한다.
+    /// </summary>
+    protected void UpdateFacing(Vector2Int from, Vector2Int to)
+    {
+        int dx = to.x - from.x;
+        if (dx == 0) return;                    // 상하 이동 → 마지막 방향 유지
+        _facingDir = dx > 0 ? 1 : -1;
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null) sr.flipX = (_facingDir < 0);
+    }
+
+    /// <summary>PlaceOnBoard 오버라이드 — 이동 후 방향 갱신</summary>
+    public override void PlaceOnBoard(Vector2Int pos)
+    {
+        Vector2Int oldPos = GridPos;
+        base.PlaceOnBoard(pos);
+        if (_initialPlaced) UpdateFacing(oldPos, pos);
+        else                _initialPlaced = true;
+    }
+
     // ── BFS 경로탐색 ──────────────────────────────────────────────────────
-    private Vector2Int? BFSNextStep(Vector2Int from, Vector2Int to)
+    protected Vector2Int? BFSNextStep(Vector2Int from, Vector2Int to)
     {
         if (from == to) return null;
 
@@ -183,7 +225,7 @@ public class EnemyUnit : Unit
                 if (!BoardManager.Instance.IsInBounds(next)) continue;
 
                 var tile = BoardManager.Instance.GetTile(next);
-                if (tile.IsWall) continue;                         // 벽 타일 우회
+                if (tile.IsWall) continue;
                 if (tile.IsOccupied && next != to) continue;
 
                 visited[next] = cur;
@@ -199,6 +241,43 @@ public class EnemyUnit : Unit
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// 여러 타일을 순서대로 부드럽게 이동하는 코루틴 (서브클래스 공용).
+    /// 각 타일 이동 후 바닥 오브젝트를 발동함.
+    /// </summary>
+    protected IEnumerator MoveAlongPath(List<Vector2Int> path)
+    {
+        const float stepDuration = 0.12f;
+        Vector2Int prevPos = GridPos;
+        foreach (var pos in path)
+        {
+            if (this == null || !gameObject.activeInHierarchy) yield break;
+
+            UpdateFacing(prevPos, pos);
+
+            Vector3 startPos  = transform.position;
+            Vector3 targetPos = BoardManager.Instance.GridToWorld(pos);
+
+            BoardManager.Instance.GetTile(GridPos)?.ClearUnit();
+            GridPos = pos;
+            BoardManager.Instance.GetTile(pos)?.SetUnit(this);
+
+            float elapsed = 0f;
+            while (elapsed < stepDuration)
+            {
+                if (this == null || !gameObject.activeInHierarchy) yield break;
+                transform.position = Vector3.Lerp(startPos, targetPos, elapsed / stepDuration);
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+            transform.position = targetPos;
+            prevPos = pos;
+
+            // 바닥 오브젝트 발동
+            FloorObjectManager.Instance?.OnUnitEnterTile(this, pos);
+        }
     }
 
     // ── 공격 오버라이드 — 킬러 이름 기록 ────────────────────────────────

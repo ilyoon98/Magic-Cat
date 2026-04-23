@@ -30,22 +30,22 @@ public class Skill_Teleport : SkillBase
         return charges > 0;
     }
 
-    protected override void OnUse(PlayerUnit caster, Vector2Int targetPos)
+    protected override bool OnUse(PlayerUnit caster, Vector2Int targetPos)
     {
         int dist = Mathf.Abs(caster.GridPos.x - targetPos.x)
                  + Mathf.Abs(caster.GridPos.y - targetPos.y);
 
         if (dist == 0 || dist > teleportRange)
         {
-            Debug.Log("[순간이동] 범위 밖이거나 현재 위치입니다.");
-            return;
+            GameUI.Instance?.ShowNotify("순간이동 범위 밖입니다", 0.7f);
+            return false;
         }
 
         var tile = BoardManager.Instance.GetTile(targetPos);
-        if (tile == null || tile.IsOccupied)
+        if (tile == null || tile.IsOccupied || tile.IsWall)
         {
-            Debug.Log("[순간이동] 목표 타일 사용 불가");
-            return;
+            GameUI.Instance?.ShowNotify("이동 불가한 타일입니다", 0.7f);
+            return false;
         }
 
         charges--;
@@ -54,6 +54,7 @@ public class Skill_Teleport : SkillBase
         Vector3 worldPos = BoardManager.Instance.GridToWorld(targetPos);
         EffectManager.Instance?.PlayExplosion(worldPos);
         GameUI.Instance?.ShowNotify($"⚡ 순간이동! (충전 {charges}/{maxCharges})", 0.8f);
+        return true;
     }
 
     /// <summary>

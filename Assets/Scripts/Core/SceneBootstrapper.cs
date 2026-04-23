@@ -59,6 +59,7 @@ public class SceneBootstrapper : MonoBehaviour
         new GameObject("AudioManager").AddComponent<AudioManager>();
         new GameObject("BoardBackground").AddComponent<BoardBackground>();
         new GameObject("FloorObjectManager").AddComponent<FloorObjectManager>();
+        new GameObject("EnemySpawnManager").AddComponent<EnemySpawnManager>();
     }
 
     // ── 2. 보드 ───────────────────────────────────────────────────────────
@@ -148,7 +149,8 @@ public class SceneBootstrapper : MonoBehaviour
         {
             sr.sprite = initSp;
             sr.color  = Color.white;
-            playerGo.transform.localScale = Vector3.one * 0.95f;
+            // ppu = 이미지 높이로 자동 계산되므로 별도 scale 불필요
+            playerGo.transform.localScale = Vector3.one;
         }
         else
         {
@@ -159,6 +161,7 @@ public class SceneBootstrapper : MonoBehaviour
         sr.sortingOrder = 5;
         var player = playerGo.AddComponent<ElementalPlayerUnit>();
         player.maxHp        = 3;
+        player.currentHp    = 3;   // Awake 타이밍 문제 보정
         player.attackDamage = 1;
         player.attackRange  = 2;
         playerGo.AddComponent<StatusEffectHandler>();

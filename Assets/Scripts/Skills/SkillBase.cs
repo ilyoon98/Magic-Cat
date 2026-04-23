@@ -35,13 +35,16 @@ public abstract class SkillBase : MonoBehaviour
         return currentCooldown <= 0;
     }
 
-    public void Use(PlayerUnit caster, Vector2Int targetPos)
+    /// <summary>
+    /// 스킬 사용 시도. OnUse가 false를 반환하면 쿨타임·행동 소모 없이 실패 처리.
+    /// </summary>
+    public bool Use(PlayerUnit caster, Vector2Int targetPos)
     {
-        if (!CanUse()) return;
-        OnUse(caster, targetPos);
-        // 치트: 쿨타임 0이면 쿨타임 세팅 안 함
-        if (CheatManager.Instance == null || !CheatManager.Instance.ZeroCooldown)
+        if (!CanUse()) return false;
+        bool success = OnUse(caster, targetPos);
+        if (success && (CheatManager.Instance == null || !CheatManager.Instance.ZeroCooldown))
             ApplyCooldown();
+        return success;
     }
 
     /// <summary>Use() 성공 후 쿨타임 적용. 원소별 개별 쿨타임 스킬에서 오버라이드.</summary>
@@ -50,7 +53,10 @@ public abstract class SkillBase : MonoBehaviour
         currentCooldown = maxCooldown;
     }
 
-    protected abstract void OnUse(PlayerUnit caster, Vector2Int targetPos);
+    /// <summary>
+    /// 스킬 실제 동작. true = 성공(행동 소모), false = 실패(행동 소모 없음).
+    /// </summary>
+    protected abstract bool OnUse(PlayerUnit caster, Vector2Int targetPos);
 
     // 이동 또는 행동 시 1 감소
     public virtual void ReduceCooldown(int amount)

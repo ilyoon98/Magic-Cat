@@ -64,7 +64,9 @@ public class PlayerInputController : MonoBehaviour
         {
             Vector2Int pos = player.GridPos + dir;
             var tile = BoardManager.Instance.GetTile(pos);
-            if (tile != null && !tile.IsOccupied)
+            // Danger(적 공격 예고) 타일은 이동 하이라이트로 덮지 않음
+            if (tile != null && !tile.IsOccupied
+                && tile.CurrentHighlight != Tile.HighlightType.Danger)
             {
                 tile.SetHighlight(Tile.HighlightType.Move);
                 moveTiles.Add(pos);
@@ -75,7 +77,12 @@ public class PlayerInputController : MonoBehaviour
     private void ClearMoveHighlight()
     {
         foreach (var pos in moveTiles)
-            BoardManager.Instance.GetTile(pos)?.SetHighlight(Tile.HighlightType.None);
+        {
+            var t = BoardManager.Instance.GetTile(pos);
+            // Danger 타일은 이동 하이라이트 해제 시에도 건드리지 않음
+            if (t != null && t.CurrentHighlight != Tile.HighlightType.Danger)
+                t.SetHighlight(Tile.HighlightType.None);
+        }
         moveTiles.Clear();
     }
 
@@ -194,6 +201,10 @@ public class PlayerInputController : MonoBehaviour
                 bool isEnemy = prevTile.IsOccupied && prevTile.OccupiedUnit is EnemyUnit;
                 prevTile.SetHighlight(isEnemy ? Tile.HighlightType.Attack : Tile.HighlightType.Skill);
             }
+            else if (prevTile.CurrentHighlight == Tile.HighlightType.Danger)
+            {
+                // Danger(적 공격 예고) 하이라이트는 마우스 이탈 시 건드리지 않음
+            }
             else
             {
                 prevTile.SetHighlight(moveTiles.Contains(lastHover)
@@ -208,6 +219,10 @@ public class PlayerInputController : MonoBehaviour
             bool cheatTp = CheatManager.Instance != null && CheatManager.Instance.TeleportMode;
             if (cheatTp && !cur.IsOccupied)
                 cur.SetHighlight(Tile.HighlightType.Selected);
+            else if (cur.CurrentHighlight == Tile.HighlightType.Danger)
+            {
+                // Danger(적 공격 예고) 타일은 마우스 진입 시에도 건드리지 않음
+            }
             else if (isMoveTile)
                 cur.SetHighlight(Tile.HighlightType.Move);
             else if (attackPreviewTiles.Contains(hover))
@@ -495,6 +510,9 @@ public class PlayerInputController : MonoBehaviour
             var tile = BoardManager.Instance.GetTile(pos);
             if (tile == null) break;
 
+            // 벽 타일 — 그 너머 하이라이트 없음
+            if (tile.IsWall) break;
+
             if (tile.IsOccupied)
             {
                 if (tile.OccupiedUnit is EnemyUnit)
@@ -564,7 +582,10 @@ public class PlayerInputController : MonoBehaviour
 
             Vector2Int pos = player.GridPos + new Vector2Int(x, y);
             var tile = BoardManager.Instance.GetTile(pos);
-            if (tile == null || tile.IsOccupied) continue;
+            if (tile == null || tile.IsOccupied || tile.IsWall) continue;
+
+            // 함정·하트 등 바닥 오브젝트가 있는 칸은 설치 불가 → 파란 강조 제외
+            if (FloorObjectManager.Instance?.GetAt(pos) != null) continue;
 
             tile.SetHighlight(Tile.HighlightType.Move);
             teleportRangeTiles.Add(pos);
@@ -699,6 +720,9 @@ public class PlayerInputController : MonoBehaviour
             var tile = BoardManager.Instance.GetTile(pos);
             if (tile == null) break;
 
+            // 벽 타일 — 공격 불가, 그 너머 하이라이트 없음
+            if (tile.IsWall) break;
+
             if (tile.IsOccupied)
             {
                 if (tile.OccupiedUnit is EnemyUnit)
@@ -722,6 +746,8 @@ public class PlayerInputController : MonoBehaviour
         {
             var tile = BoardManager.Instance.GetTile(pos);
             if (tile == null) continue;
+            // Danger 타일은 공격 미리보기 해제 시에도 건드리지 않음
+            if (tile.CurrentHighlight == Tile.HighlightType.Danger) continue;
             tile.SetHighlight(moveTiles.Contains(pos)
                 ? Tile.HighlightType.Move
                 : Tile.HighlightType.None);

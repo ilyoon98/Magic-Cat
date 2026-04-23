@@ -13,7 +13,7 @@ public class Skill_WhiteMagic : SkillBase
         maxCooldown = 4;
     }
 
-    protected override void OnUse(PlayerUnit caster, Vector2Int targetPos)
+    protected override bool OnUse(PlayerUnit caster, Vector2Int targetPos)
     {
         if (caster is BlackWhitePlayerUnit bw)
             bw.SetMode(BlackWhitePlayerUnit.Mode.White);
@@ -24,5 +24,6 @@ public class Skill_WhiteMagic : SkillBase
         // 전환 이펙트 (녹색 빛)
         EffectManager.Instance?.PlayWoodHit(caster.transform.position);
         GameUI.Instance?.ShowNotify("⬜ 백마법 모드 + HP 회복", 1.0f);
+        return true;
     }
 }

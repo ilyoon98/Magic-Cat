@@ -14,15 +14,15 @@ public class Skill_ArcaneBlast : SkillBase
         maxCooldown = 0;
     }
 
-    protected override void OnUse(PlayerUnit caster, Vector2Int targetPos)
+    protected override bool OnUse(PlayerUnit caster, Vector2Int targetPos)
     {
         // 1. 4방향 스냅
         Vector2Int dir = GridUtil.SnapToCardinal(targetPos - caster.GridPos);
 
-        // 2. 직선 첫 번째 적 탐색
+        // 2. 직선 첫 번째 적 탐색 (벽에서 멈춤)
         EnemyUnit capturedTarget = GridUtil.FindFirstEnemyInDir(caster.GridPos, dir);
 
-        // 3. 투사체 목표
+        // 3. 투사체 목표 (벽에서 멈춤)
         Vector3 from = BoardManager.Instance.GridToWorld(caster.GridPos);
         Vector3 to   = capturedTarget != null
             ? BoardManager.Instance.GridToWorld(capturedTarget.GridPos)
@@ -36,5 +36,6 @@ public class Skill_ArcaneBlast : SkillBase
             if (capturedTarget != null && capturedTarget.IsAlive)
                 capturedTarget.TakeDamage(dmg, isCritical: true);
         });
+        return true;
     }
 }

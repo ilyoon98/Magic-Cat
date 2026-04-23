@@ -290,11 +290,27 @@ public class FloorObject : MonoBehaviour
                 break;
 
             case ObjectType.Trap:
-                sr.sprite = MakeTrapSprite();
-                sr.color  = IsActive
-                    ? new Color(1f, 0.3f, 0.3f, 0.9f)
-                    : new Color(1f, 0.3f, 0.3f, 0.35f);
+            {
+                // 스테이지별 함정 이미지 우선 사용: Resources/Units/Stage{n}_Trap.png
+                int stage = StageManager.Instance != null ? StageManager.Instance.CurrentStage : 1;
+                Sprite trapSp = UnitSpriteCache.LoadSprite($"Units/Stage{stage}_Trap");
+                if (trapSp != null)
+                {
+                    sr.sprite = trapSp;
+                    sr.color  = IsActive
+                        ? Color.white
+                        : new Color(1f, 1f, 1f, 0.35f); // 쿨다운 중: 반투명
+                }
+                else
+                {
+                    // 이미지 없음 → 절차적 X 폴백
+                    sr.sprite = MakeTrapSprite();
+                    sr.color  = IsActive
+                        ? new Color(1f, 0.3f, 0.3f, 0.9f)
+                        : new Color(1f, 0.3f, 0.3f, 0.35f);
+                }
                 break;
+            }
 
             case ObjectType.Element:
                 if (Element == ElementType.Earth)

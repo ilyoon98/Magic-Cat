@@ -36,6 +36,9 @@ public class Tile : MonoBehaviour
 
     public enum HighlightType { None, Move, Attack, Selected, Danger, Skill }
 
+    /// <summary>현재 설정된 하이라이트 타입 (마우스 호버 복원에 사용)</summary>
+    public HighlightType CurrentHighlight { get; private set; } = HighlightType.None;
+
     /// <summary>벽 상태 설정 — true 시 갈색으로 변하고 이동 불가</summary>
     public void SetWall(bool wall)
     {
@@ -45,6 +48,7 @@ public class Tile : MonoBehaviour
 
     public void SetHighlight(HighlightType type)
     {
+        CurrentHighlight = type;
         if (spriteRenderer == null) return;
         if (IsWall) { spriteRenderer.color = wallColor; return; } // 벽은 항상 갈색
         spriteRenderer.color = type switch

@@ -38,7 +38,9 @@ public class StageManager : MonoBehaviour
         FloorObjectManager.Instance?.ClearAll();
         EnemyManager.Instance.Reset();
 
-        var enemyTypes = GetEnemyTypes(CurrentStage, CurrentMap);
+        var enemyTypes = EnemySpawnManager.Instance != null
+            ? EnemySpawnManager.Instance.GetEnemyIndices(CurrentStage, CurrentMap)
+            : GetEnemyTypesFallback(CurrentStage, CurrentMap);
         var floorTypes = GetFloorObjectTypes(CurrentStage, CurrentMap);
 
         var player   = TurnManager.Instance.GetPlayer();
@@ -60,7 +62,7 @@ public class StageManager : MonoBehaviour
             player.PlaceOnBoard(savedPos);
 
             for (int i = 0; i < enemyTypes.Count; i++)
-                SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), enemyPos[i]);
+                SpawnEnemy(enemyTypes[i], enemyPos[i]);
 
             if (FloorObjectManager.Instance != null)
                 for (int i = 0; i < floorTypes.Count; i++)
@@ -85,7 +87,7 @@ public class StageManager : MonoBehaviour
             }
 
             for (int i = 0; i < enemyTypes.Count; i++)
-                SpawnEnemy(EnemyDataTable.Get(enemyTypes[i]), enemyPos[i]);
+                SpawnEnemy(enemyTypes[i], enemyPos[i]);
 
             if (FloorObjectManager.Instance != null)
                 for (int i = 0; i < floorTypes.Count; i++)
@@ -293,7 +295,7 @@ public class StageManager : MonoBehaviour
         {
             sr.sprite = playerSp;
             sr.color  = Color.white;
-            go.transform.localScale = Vector3.one * 0.95f;
+            go.transform.localScale = Vector3.one;
         }
         else
         {
@@ -311,6 +313,7 @@ public class StageManager : MonoBehaviour
         };
 
         newPlayer.maxHp        = 3;
+        newPlayer.currentHp    = 3;   // Awake 타이밍 문제 보정
         newPlayer.attackDamage = 1;
         if (stage < 3) newPlayer.attackRange = 2; // 3스테이지는 ArcanePlayerUnit.Awake에서 999 설정
 
@@ -323,19 +326,22 @@ public class StageManager : MonoBehaviour
         Debug.Log($"[StageManager] 플레이어 교체 → {StageCharacters[stage - 1].name}");
     }
 
-    // ── 스테이지/맵별 적 종류 정의 (위치는 SpawnCurrentMap에서 랜덤 배정) ──
-    private static List<int> GetEnemyTypes(int stage, int map) => (stage, map) switch
+    // ── 스테이지/맵별 적 종류 정의 — EnemySpawnManager 미로드 시 폴백 ─────
+    private static List<int> GetEnemyTypesFallback(int stage, int map) => (stage, map) switch
     {
-        (1, 1) => new List<int> { 1, 1 },
-        (1, 2) => new List<int> { 1, 1, 1 },
-        (1, 3) => new List<int> { 2 },           // 보스
-        (2, 1) => new List<int> { 1, 1, 1 },
-        (2, 2) => new List<int> { 1, 1, 1, 1 },
-        (2, 3) => new List<int> { 2, 1 },         // 보스
-        (3, 1) => new List<int> { 1, 1, 1, 1 },
-        (3, 2) => new List<int> { 1, 1, 1, 1, 1 },
-        (3, 3) => new List<int> { 2, 1, 1 },      // 보스
-        _      => new List<int> { 1 }
+        // Stage 1: Goblin(1) / Orc(2) / Centaurus(3)
+        (1, 1) => new List<int> { 1, 1 },            // 고블린 2마리
+        (1, 2) => new List<int> { 1, 1, 2 },          // 고블린 2 + 오크 1
+        (1, 3) => new List<int> { 3 },                // 센타우루스 (보스)
+        // Stage 2: Slime(4) / BigSlime(5)
+        (2, 1) => new List<int> { 4, 4, 4 },
+        (2, 2) => new List<int> { 4, 4, 4, 4 },
+        (2, 3) => new List<int> { 5, 4 },             // 보스
+        // Stage 3: Slime(4) / BigSlime(5)
+        (3, 1) => new List<int> { 4, 4, 4, 4 },
+        (3, 2) => new List<int> { 4, 4, 4, 4, 4 },
+        (3, 3) => new List<int> { 5, 4, 4 },          // 보스
+        _      => new List<int> { 4 }
     };
 
     // ── 스테이지/맵별 바닥 오브젝트 종류 정의 (위치는 SpawnCurrentMap에서 랜덤 배정) ──
@@ -359,47 +365,13 @@ public class StageManager : MonoBehaviour
         };
     }
 
-    // ── 적 스폰 ───────────────────────────────────────────────────────────
-    private void SpawnEnemy(EnemyDataTable.EnemyData data, Vector2Int pos)
+    // ── 적 스폰 — EnemySpawnManager에 위임 ───────────────────────────────
+    private static void SpawnEnemy(int enemyIndex, Vector2Int pos)
     {
-        Color fallbackColor = data.IsBoss
-            ? new Color(0.85f, 0.2f, 0.2f)
-            : new Color(1f, 0.45f, 0.45f);
-        float fallbackScale = data.IsBoss ? 0.85f : 0.65f;
-
-        var go = new GameObject(data.Name);
-        var sr = go.AddComponent<SpriteRenderer>();
-
-        // Resources/Units/{이름(공백제거)} 이미지 우선 사용, 없으면 원형 폴백
-        string spriteName = data.Name.Replace(" ", "");
-        Sprite enemySp = UnitSpriteCache.LoadSprite($"Units/{spriteName}");
-        if (enemySp != null)
-        {
-            sr.sprite = enemySp;
-            sr.color  = Color.white;
-            go.transform.localScale = Vector3.one * (data.IsBoss ? 1.05f : 0.90f);
-        }
+        if (EnemySpawnManager.Instance != null)
+            EnemySpawnManager.Instance.SpawnEnemy(enemyIndex, pos);
         else
-        {
-            sr.sprite = UnitSpriteCache.CircleSprite;
-            sr.color  = fallbackColor;
-            go.transform.localScale = Vector3.one * fallbackScale;
-        }
-        sr.sortingOrder = 5;
-
-        var enemy = go.AddComponent<EnemyUnit>();
-        enemy.maxHp        = data.HP;
-        enemy.attackDamage = data.Damage;
-        enemy.attackRange  = data.AttackRange;
-        enemy.moveSpeed    = data.MoveSpeed;
-        go.AddComponent<StatusEffectHandler>();
-
-        var hpDisplay = go.AddComponent<EnemyHPDisplay>();
-        hpDisplay.Init(enemy);
-
-        if (data.IsBoss) EnemyManager.Instance.SpawnBoss(enemy);
-        else             EnemyManager.Instance.RegisterEnemy(enemy);
-
-        enemy.PlaceOnBoard(pos);
+            Debug.LogError("[StageManager] EnemySpawnManager 인스턴스 없음 — " +
+                           "SceneBootstrapper에서 EnemySpawnManager를 추가했는지 확인해주세요.");
     }
 }
