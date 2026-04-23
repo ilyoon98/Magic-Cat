@@ -49,9 +49,19 @@ public class CentaurusUnit : EnemyUnit
 
         // 일직선 여부 확인 (같은 행 또는 같은 열)
         bool inLine = player.GridPos.x == GridPos.x || player.GridPos.y == GridPos.y;
+
+        // 일직선이더라도 바로 앞이 벽(땅 원소 포함)으로 막혀 있으면 돌진 포기
+        if (inLine)
+        {
+            Vector2Int dir       = GridUtil.SnapToCardinal(player.GridPos - GridPos);
+            Tile       firstTile = BoardManager.Instance.GetTile(GridPos + dir);
+            if (firstTile == null || firstTile.IsWall)
+                inLine = false;
+        }
+
         if (!inLine)
         {
-            // 일직선 아님 → BFS 1칸 이동
+            // 일직선 아님 or 막힘 → BFS 1칸 이동으로 우회
             Vector2Int? next = BFSNextStep(GridPos, player.GridPos);
             if (next != null)
             {
@@ -62,7 +72,7 @@ public class CentaurusUnit : EnemyUnit
             return;
         }
 
-        // 일직선 → 돌진 예고
+        // 일직선 + 경로 열려있음 → 돌진 예고
         chargeDir = GridUtil.SnapToCardinal(player.GridPos - GridPos);
 
         // 직선 경로 Danger 하이라이트
