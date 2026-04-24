@@ -488,10 +488,10 @@ public class PortraitPanel : MonoBehaviour
         RefreshSkillIcon(1, player.GetSkill(2), "E");
 
         // 흑/백 게이지 갱신 (2스테이지 BlackWhitePlayerUnit)
-        if (player is BlackWhitePlayerUnit bw)
+        if (player is BlackWhitePlayerUnit bwGauge)
         {
-            if (blackGaugeFill != null) blackGaugeFill.fillAmount = bw.BlackGauge / 100f;
-            if (whiteGaugeFill != null) whiteGaugeFill.fillAmount = bw.WhiteGauge / 100f;
+            if (blackGaugeFill != null) blackGaugeFill.fillAmount = bwGauge.BlackGauge / 100f;
+            if (whiteGaugeFill != null) whiteGaugeFill.fillAmount = bwGauge.WhiteGauge / 100f;
         }
     }
 
