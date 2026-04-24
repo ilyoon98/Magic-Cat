@@ -1,6 +1,0 @@
-INDEX,EnemyName,Health,Damage,ATTackRange,MoveSpeed,Type
-1,고블린,1,1,1,2,Nomal
-2,오크,5,2,2,1,Nomal
-3,켄타우로스,8,2,1,2,Boss
-4,슬라임,3,1,1,1,Nomal
-6,킹슬라임,10,2,1,1,Boss

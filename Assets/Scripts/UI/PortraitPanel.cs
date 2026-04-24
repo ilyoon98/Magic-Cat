@@ -26,6 +26,11 @@ public class PortraitPanel : MonoBehaviour
     // ── 우측 대형 초상화 ──────────────────────────────────────────────────
     private Image bigPortraitImage;
 
+    // ── 흑/백 게이지 UI (2스테이지 전용) ────────────────────────────────
+    private GameObject gaugeRoot;
+    private UnityEngine.UI.Image blackGaugeFill;
+    private UnityEngine.UI.Image whiteGaugeFill;
+
     // ── HP 기반 초상화 ────────────────────────────────────────────────────
     private Sprite[] currentHpSprites = new Sprite[4];
     private int      lowestHpReached  = 3;
@@ -51,6 +56,7 @@ public class PortraitPanel : MonoBehaviour
     {
         BuildBigPortrait(canvasRoot);
         BuildBottomSkillBar(canvasRoot);
+        BuildGaugeBar(canvasRoot);   // 흑/백 게이지 (2스테이지 전용, 초기 비표시)
         if (topBar != null) BuildTopBarInfo(topBar);
     }
 
@@ -232,6 +238,77 @@ public class PortraitPanel : MonoBehaviour
         skillCdTxts[idx] = nameTxt; // 쿨타임 정보는 이름 텍스트에 두 번째 줄로 표시
     }
 
+    // ── 흑/백 게이지 바 (SkillBar 바로 위, 2스테이지에서만 표시) ────────
+    private void BuildGaugeBar(Transform canvasRoot)
+    {
+        // 전체 루트 (SkillBar 위쪽)
+        gaugeRoot = new GameObject("GaugeBar");
+        gaugeRoot.transform.SetParent(canvasRoot, false);
+        var grt = gaugeRoot.AddComponent<RectTransform>();
+        grt.anchorMin        = new Vector2(0f, 0f);
+        grt.anchorMax        = new Vector2(0f, 0f);
+        grt.pivot            = new Vector2(0f, 0f);
+        grt.anchoredPosition = new Vector2(10f, 215f); // SkillBar(y=10+200=210) 위 5px
+        grt.sizeDelta        = new Vector2(470f, 28f);
+        gaugeRoot.AddComponent<Image>().color = new Color(0.05f, 0.05f, 0.10f, 0.80f);
+
+        // 흑 게이지 (왼쪽 절반)
+        blackGaugeFill = BuildGaugeSlot(gaugeRoot.transform, "BlackGauge",
+            new Vector2(0f, 0f), new Vector2(0.5f, 1f),
+            new Color(0.35f, 0.10f, 0.55f),   // 어두운 보라
+            new Color(0.60f, 0.20f, 0.90f),   // 채워진 보라
+            "⬛ 흑");
+
+        // 백 게이지 (오른쪽 절반)
+        whiteGaugeFill = BuildGaugeSlot(gaugeRoot.transform, "WhiteGauge",
+            new Vector2(0.5f, 0f), new Vector2(1f, 1f),
+            new Color(0.30f, 0.30f, 0.40f),   // 어두운 회색
+            new Color(0.85f, 0.85f, 1.00f),   // 채워진 흰빛
+            "⬜ 백");
+
+        gaugeRoot.SetActive(false); // 2스테이지 진입 시 SetStage에서 활성화
+    }
+
+    private Image BuildGaugeSlot(Transform parent, string name,
+                                  Vector2 anchorMin, Vector2 anchorMax,
+                                  Color bgColor, Color fillColor, string label)
+    {
+        // 배경
+        var bg = new GameObject($"{name}BG");
+        bg.transform.SetParent(parent, false);
+        var bgRt = bg.AddComponent<RectTransform>();
+        bgRt.anchorMin = anchorMin; bgRt.anchorMax = anchorMax;
+        bgRt.offsetMin = new Vector2(2f, 2f); bgRt.offsetMax = new Vector2(-2f, -2f);
+        bg.AddComponent<Image>().color = bgColor;
+
+        // 채움 바 (Filled)
+        var fill = new GameObject($"{name}Fill");
+        fill.transform.SetParent(bg.transform, false);
+        var frt = fill.AddComponent<RectTransform>();
+        frt.anchorMin = Vector2.zero; frt.anchorMax = new Vector2(0.5f, 1f); // 50% 초기값
+        frt.offsetMin = frt.offsetMax = Vector2.zero;
+        var fillImg = fill.AddComponent<Image>();
+        fillImg.color = fillColor;
+        fillImg.type  = Image.Type.Filled;
+        fillImg.fillMethod = Image.FillMethod.Horizontal;
+        fillImg.fillAmount = 0.5f;
+
+        // 레이블
+        var lbl = new GameObject($"{name}Label");
+        lbl.transform.SetParent(bg.transform, false);
+        var lrt = lbl.AddComponent<RectTransform>();
+        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+        var txt = lbl.AddComponent<Text>();
+        txt.text      = label;
+        txt.fontSize  = 13;
+        txt.color     = Color.white;
+        txt.alignment = TextAnchor.MiddleCenter;
+        txt.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+        return fillImg;
+    }
+
     // ── 우측 대형 초상화 ──────────────────────────────────────────────────
     private void BuildBigPortrait(Transform canvasRoot)
     {
@@ -241,7 +318,7 @@ public class PortraitPanel : MonoBehaviour
         frt.anchorMin        = new Vector2(1f, 0f);
         frt.anchorMax        = new Vector2(1f, 1f);
         frt.pivot            = new Vector2(1f, 0.5f);
-        frt.anchoredPosition = new Vector2(-58f, 0f);  // 좌측으로 50 이동 (-8 → -58)
+        frt.anchoredPosition = new Vector2(-58f, -40f); // 좌측 50, 아래 40
         frt.sizeDelta        = new Vector2(460f, -56f); // 상하로 56 줄임 (pivot 중앙이므로 각 28씩)
         frame.AddComponent<Image>().color = new Color(0.04f, 0.05f, 0.08f, 0.85f);
 
@@ -409,6 +486,13 @@ public class PortraitPanel : MonoBehaviour
         // 스킬 아이콘
         RefreshSkillIcon(0, player.GetSkill(1), "Q");
         RefreshSkillIcon(1, player.GetSkill(2), "E");
+
+        // 흑/백 게이지 갱신 (2스테이지 BlackWhitePlayerUnit)
+        if (player is BlackWhitePlayerUnit bw)
+        {
+            if (blackGaugeFill != null) blackGaugeFill.fillAmount = bw.BlackGauge / 100f;
+            if (whiteGaugeFill != null) whiteGaugeFill.fillAmount = bw.WhiteGauge / 100f;
+        }
     }
 
     private void RefreshSkillIcon(int idx, SkillBase skill, string key)
@@ -464,6 +548,10 @@ public class PortraitPanel : MonoBehaviour
         if (stageText != null) stageText.text = $"STAGE {stage}";
         LoadPortraitsForStage(stage);
         LoadSkillIcons(stage);
+
+        // 흑/백 게이지는 2스테이지에서만 표시
+        if (gaugeRoot != null)
+            gaugeRoot.SetActive(stage == 2);
     }
 
     public void SetCharacterInfo(string charName, string portrait)

@@ -159,9 +159,14 @@ public class EnemySpawnManager : MonoBehaviour
         // ── 로직 컴포넌트 추가 (INDEX 기반 서브클래스 선택) ──────────────
         EnemyUnit enemy = enemyIndex switch
         {
-            1 => go.GetComponent<GoblinUnit>()    ?? go.AddComponent<GoblinUnit>(),    // 스피더
-            3 => go.GetComponent<CentaurusUnit>() ?? go.AddComponent<CentaurusUnit>(), // 돌진 보스
-            _ => go.GetComponent<EnemyUnit>()     ?? go.AddComponent<EnemyUnit>()      // 기본 AI
+            1 => go.GetComponent<GoblinUnit>()     ?? go.AddComponent<GoblinUnit>(),     // 스피더
+            3 => go.GetComponent<CentaurusUnit>()  ?? go.AddComponent<CentaurusUnit>(),  // 돌진 보스
+            4 => go.GetComponent<SlimeUnit>()      ?? go.AddComponent<SlimeUnit>(),      // 분열 슬라임
+            5 => go.GetComponent<SmallSlimeUnit>() ?? go.AddComponent<SmallSlimeUnit>(), // 소형 슬라임
+            6 => go.GetComponent<DarkGiantUnit>()  ?? go.AddComponent<DarkGiantUnit>(),  // 광역 보스
+            7 => go.GetComponent<EyeballUnit>()    ?? go.AddComponent<EyeballUnit>(),    // 레인저
+            8 => go.GetComponent<ShadowHandUnit>() ?? go.AddComponent<ShadowHandUnit>(), // 스피더
+            _ => go.GetComponent<EnemyUnit>()      ?? go.AddComponent<EnemyUnit>()       // 기본 AI
         };
 
         // ── 스탯 적용 ─────────────────────────────────────────────────────
@@ -253,12 +258,15 @@ public class EnemySpawnManager : MonoBehaviour
     /// </summary>
     private static Color GetIndexColor(int index) => index switch
     {
-        1 => new Color(0.35f, 0.85f, 0.35f),  // Goblin  — 초록
-        2 => new Color(0.55f, 0.30f, 0.75f),  // Orc     — 보라
-        3 => new Color(0.90f, 0.20f, 0.20f),  // Centaurus — 진빨강 (보스)
-        4 => new Color(0.25f, 0.80f, 0.95f),  // Slime   — 하늘
-        6 => new Color(0.75f, 0.10f, 0.10f),  // BigSlime — 암적 (보스)
-        _ => new Color(1.00f, 0.45f, 0.45f),  // 기타    — 분홍
+        1 => new Color(0.35f, 0.85f, 0.35f),  // 고블린      — 초록
+        2 => new Color(0.55f, 0.30f, 0.75f),  // 오크        — 보라
+        3 => new Color(0.90f, 0.20f, 0.20f),  // 켄타우로스  — 진빨강 (보스)
+        4 => new Color(0.25f, 0.80f, 0.95f),  // 슬라임      — 하늘
+        5 => new Color(0.55f, 0.90f, 1.00f),  // 소형슬라임  — 연하늘
+        6 => new Color(0.10f, 0.05f, 0.20f),  // 암흑거인    — 진보라 (보스)
+        7 => new Color(0.95f, 0.60f, 0.10f),  // 아이볼      — 주황
+        8 => new Color(0.20f, 0.20f, 0.30f),  // 그림자손    — 짙은 회청
+        _ => new Color(1.00f, 0.45f, 0.45f),  // 기타        — 분홍
     };
 
     // ── 스프라이트 이름 폴백 (INDEX → 영어 파일명) ───────────────────────
@@ -273,7 +281,10 @@ public class EnemySpawnManager : MonoBehaviour
         2 => "Orc",
         3 => "Centaurus",
         4 => "Slime",
-        6 => "KingSlime",
+        5 => "SmallSlime",
+        6 => "DarkGiant",
+        7 => "Eyeball",
+        8 => "ShadowHand",
         _ => null,
     };
 

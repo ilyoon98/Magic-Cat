@@ -16,7 +16,7 @@ using UnityEngine;
 /// </summary>
 public class FloorObject : MonoBehaviour
 {
-    public enum ObjectType  { Heart, Trap, Element }
+    public enum ObjectType  { Heart, Trap, Element, HolyGround }
     public enum ElementType { Fire, Earth, Wood, Water }
 
     public ObjectType  Type    { get; private set; }
@@ -54,7 +54,16 @@ public class FloorObject : MonoBehaviour
     {
         Type    = type;
         GridPos = pos;
-        UpdateVisual();
+        if (type == ObjectType.HolyGround) InitHolyGround(pos);
+        else UpdateVisual();
+    }
+
+    /// <summary>신성 지역 초기화 — 밟은 유닛 종류에 따라 회복/데미지 후 소멸</summary>
+    public void InitHolyGround(Vector2Int pos)
+    {
+        Type    = ObjectType.HolyGround;
+        GridPos = pos;
+        UpdateVisual(); // Init()에서 HolyGround 분기로 호출됨
     }
 
     public void InitElement(ElementType element, Vector2Int pos)
@@ -78,9 +87,10 @@ public class FloorObject : MonoBehaviour
     {
         switch (Type)
         {
-            case ObjectType.Heart:   return ActivateHeart(unit);
-            case ObjectType.Trap:    return ActivateTrap(unit);
-            case ObjectType.Element: return ActivateElement(unit);
+            case ObjectType.Heart:      return ActivateHeart(unit);
+            case ObjectType.Trap:       return ActivateTrap(unit);
+            case ObjectType.Element:    return ActivateElement(unit);
+            case ObjectType.HolyGround: return ActivateHolyGround(unit);
         }
         return false;
     }
@@ -105,6 +115,26 @@ public class FloorObject : MonoBehaviour
         }
         EffectManager.Instance?.PlayBlood(unit.transform.position);
         StartCooldown();
+        return true;
+    }
+
+    private bool ActivateHolyGround(Unit unit)
+    {
+        if (unit is PlayerUnit)
+        {
+            // 플레이어 → HP +1 회복 + 소멸
+            unit.Heal(1);
+            EffectManager.Instance?.PlayWoodHit(unit.transform.position);
+            GameUI.Instance?.ShowNotify("✨ 신성 지역 — HP 회복!", 1.0f);
+        }
+        else if (unit is EnemyUnit)
+        {
+            // 적 → 데미지 1 + 소멸
+            unit.TakeDamage(1);
+            EffectManager.Instance?.PlayExplosion(unit.transform.position);
+            GameUI.Instance?.ShowNotify("✨ 신성 지역 — 적 데미지!", 1.0f);
+        }
+        FloorObjectManager.Instance?.Remove(this);
         return true;
     }
 
@@ -311,6 +341,11 @@ public class FloorObject : MonoBehaviour
                 }
                 break;
             }
+
+            case ObjectType.HolyGround:
+                sr.sprite = MakeDiamondSprite();
+                sr.color  = new Color(1.00f, 0.95f, 0.40f, 0.88f); // 금빛
+                break;
 
             case ObjectType.Element:
                 if (Element == ElementType.Earth)

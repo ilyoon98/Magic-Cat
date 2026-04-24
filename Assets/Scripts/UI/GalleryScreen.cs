@@ -31,6 +31,10 @@ public class GalleryScreen : MonoBehaviour
     private GameObject stageSelectPanel;
     private GameObject detailPanel;
 
+    // 갤러리 스테이지 선택 카드 배경 이미지 (ShowSensitiveImages 갱신용)
+    private readonly Image[]  cardBgImgs    = new Image[3];
+    private readonly Sprite[] cardBgSprites = new Sprite[3];
+
     private Image[,]      cellImgs  = new Image[ROWS, COLS];
     private GameObject[,] lockIcons = new GameObject[ROWS, COLS];
     private Text          detailTitle;
@@ -134,15 +138,17 @@ public class GalleryScreen : MonoBehaviour
             crt.sizeDelta = new Vector2(540f, 720f);
             card.AddComponent<Image>().color = new Color(0.08f, 0.10f, 0.17f, 1f);
 
-            // 배경 랜드스케이프 이미지
+            // 배경 랜드스케이프 이미지 (ShowSensitiveImages 상태에 따라 Show()에서 갱신)
             var bgGo = new GameObject("BgImg"); bgGo.transform.SetParent(card.transform, false);
             var bgRt = bgGo.AddComponent<RectTransform>();
             bgRt.anchorMin = Vector2.zero; bgRt.anchorMax = Vector2.one; bgRt.sizeDelta = Vector2.zero;
             var bgImg = bgGo.AddComponent<Image>();
             bgImg.preserveAspect = true;
+            bgImg.color = Color.clear; // Show()의 RefreshCardBgImages()에서 결정
             Sprite bgSp = LoadSprite($"Stage/Landscape_{stage}");
-            if (bgSp != null) { bgImg.sprite = bgSp; bgImg.color = new Color(1f, 1f, 1f, 0.22f); }
-            else bgImg.color = Color.clear;
+            if (bgSp != null) bgImg.sprite = bgSp;
+            cardBgImgs[i]    = bgImg;
+            cardBgSprites[i] = bgSp;
 
             // 상단 컬러 바
             var bar = new GameObject("Bar"); bar.transform.SetParent(card.transform, false);
@@ -419,9 +425,24 @@ public class GalleryScreen : MonoBehaviour
     // ═══════════════════════════════════════════════════════════════════════
     public void Show()
     {
+        RefreshCardBgImages();
         stageSelectPanel.SetActive(true);
         detailPanel.SetActive(false);
         fullViewPanel.SetActive(false);
+    }
+
+    /// <summary>갤러리 스테이지 선택 카드의 Landscape 배경을 ShowSensitiveImages 상태에 맞게 갱신</summary>
+    private void RefreshCardBgImages()
+    {
+        bool showImages = CheatManager.Instance != null && CheatManager.Instance.ShowSensitiveImages;
+        for (int i = 0; i < 3; i++)
+        {
+            if (cardBgImgs[i] == null) continue;
+            if (showImages && cardBgSprites[i] != null)
+                cardBgImgs[i].color = new Color(1f, 1f, 1f, 0.22f);
+            else
+                cardBgImgs[i].color = Color.clear;
+        }
     }
 
     public void Hide()
@@ -444,6 +465,7 @@ public class GalleryScreen : MonoBehaviour
     /// <summary>외부 (CheatPanel 등)에서 호출 — 이미지 표시 상태 즉시 갱신</summary>
     public void RefreshAll()
     {
+        RefreshCardBgImages();
         if (currentStage > 0 && detailPanel != null && detailPanel.activeSelf)
             RefreshDetail();
     }

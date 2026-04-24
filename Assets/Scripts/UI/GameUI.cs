@@ -17,6 +17,7 @@ public class GameUI : MonoBehaviour
     private Text   actionMoveText;
     private Text   actionSkillText;
     private Button endTurnButton;
+    private Text   actionCountText;   // EndTurnBtn 위쪽 "행동 X/2" 표시
     private Text   notifyText;
     private float  notifyTimer;
 
@@ -80,14 +81,31 @@ public class GameUI : MonoBehaviour
             Vector2.zero, Vector2.zero,
             "✦ 스킬\n○", 22, Color.white, TextAnchor.MiddleCenter);
 
-        // ━━━ 우측 하단: 턴 종료 버튼 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ━━━ 좌측 하단: 턴 종료 버튼 (SkillBar 위) ━━━━━━━━━━━━━━━━━━━━━━━━━
         endTurnButton = MakeButton(canvas.transform, "EndTurnBtn",
-            new Vector2(1f, 0f), new Vector2(1f, 0f),
-            new Vector2(-95f, 50f), new Vector2(165f, 58f),
+            new Vector2(0f, 0f), new Vector2(0f, 0f),
+            new Vector2(125f, 270f), new Vector2(230f, 100f),
             new Color(0.2f, 0.5f, 0.95f));
         endTurnButton.GetComponentInChildren<Text>().text = "턴 종료\n[Space]";
-        endTurnButton.GetComponentInChildren<Text>().fontSize = 19;
+        endTurnButton.GetComponentInChildren<Text>().fontSize = 30;
         endTurnButton.onClick.AddListener(() => TurnManager.Instance?.SkipTurn());
+
+        // 버튼 위쪽: 행동 X/2 카운터 텍스트
+        var actGo = new GameObject("ActionCount");
+        actGo.transform.SetParent(endTurnButton.transform, false);
+        var art = actGo.AddComponent<RectTransform>();
+        art.anchorMin        = new Vector2(0f, 1f);
+        art.anchorMax        = new Vector2(1f, 1f);
+        art.pivot            = new Vector2(0.5f, 0f);
+        art.anchoredPosition = new Vector2(0f, 8f);
+        art.sizeDelta        = new Vector2(0f, 34f);
+        actionCountText = actGo.AddComponent<Text>();
+        actionCountText.text      = "행동 0 / 2";
+        actionCountText.fontSize  = 22;
+        actionCountText.color     = new Color(0.75f, 0.85f, 1f);
+        actionCountText.alignment = TextAnchor.MiddleCenter;
+        actionCountText.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        actionCountText.supportRichText = true;
 
         // ━━━ 우상단: 메뉴 버튼 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         var menuBtn = MakeButton(canvas.transform, "MenuBtn",
@@ -217,14 +235,18 @@ public class GameUI : MonoBehaviour
 
         if (player != null)
         {
-            // 턴당 2행동 — 남은 행동 수 + 각 종류별 사용 여부 표시
+            // TurnText: 턴 번호만 표시 (행동 카운터는 EndTurnBtn 위쪽으로 이동)
             turnText.text = isPlayerTurn
-                ? $"[ 플레이어 턴  {TurnManager.Instance.TurnCount} ]  행동 {player.ActionsUsed}/2"
+                ? $"[ 플레이어 턴  {TurnManager.Instance.TurnCount} ]"
                 : "[ 적 턴 ... ]";
 
             SetActionText(actionAttackText, "⚔ 공격", !player.CanAttack);
             SetActionText(actionMoveText,   "👣 이동", !player.CanMove);
             SetActionText(actionSkillText,  "✦ 스킬",  !player.CanUseSkill);
+
+            // 행동 카운터 — EndTurnBtn 위
+            if (actionCountText != null)
+                actionCountText.text = $"행동  {player.ActionsUsed} / 2";
         }
         else
         {
@@ -234,9 +256,22 @@ public class GameUI : MonoBehaviour
         }
 
         endTurnButton.interactable = isPlayerTurn;
-        endTurnButton.GetComponent<Image>().color = isPlayerTurn
-            ? new Color(0.2f, 0.5f, 0.95f)
-            : new Color(0.18f, 0.18f, 0.22f);
+
+        // EndTurnBtn 색: 남은 행동 수에 따라 변경
+        if (!isPlayerTurn || player == null)
+        {
+            endTurnButton.GetComponent<Image>().color = new Color(0.18f, 0.18f, 0.22f);
+        }
+        else
+        {
+            int remaining = 2 - player.ActionsUsed;
+            endTurnButton.GetComponent<Image>().color = remaining switch
+            {
+                2 => new Color(0.22f, 0.38f, 0.68f), // 2개 남음 — 어두운 파랑
+                1 => new Color(0.78f, 0.50f, 0.10f), // 1개 남음 — 주황
+                _ => new Color(0.18f, 0.62f, 0.28f), // 0개 남음 — 초록 (턴 종료 유도)
+            };
+        }
 
         if (player != null)
             PortraitPanel.Instance?.Refresh(player);
