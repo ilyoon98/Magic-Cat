@@ -59,6 +59,7 @@ public class SceneBootstrapper : MonoBehaviour
         new GameObject("AudioManager").AddComponent<AudioManager>();
         new GameObject("BoardBackground").AddComponent<BoardBackground>();
         new GameObject("FloorObjectManager").AddComponent<FloorObjectManager>();
+        new GameObject("WallManager").AddComponent<WallManager>();
         new GameObject("EnemySpawnManager").AddComponent<EnemySpawnManager>();
     }
 

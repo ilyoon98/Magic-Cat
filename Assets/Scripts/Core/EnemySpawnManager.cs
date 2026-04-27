@@ -117,6 +117,24 @@ public class EnemySpawnManager : MonoBehaviour
     // ── 공개 API ─────────────────────────────────────────────────────────
 
     /// <summary>
+    /// 해당 스테이지에 등장하는 고유 적 INDEX 목록 반환 (중복 없음, 라운드 순서대로).
+    /// 갤러리·UI 등 비게임플레이 용도로 사용. 데이터 없어도 경고 없음.
+    /// </summary>
+    public List<int> GetUniqueEnemyIndices(int stage)
+    {
+        if (_spawnTable == null) return new List<int>();
+        var seen   = new HashSet<int>();
+        var result = new List<int>();
+        for (int round = 1; round <= 10; round++)
+        {
+            if (!_spawnTable.TryGetValue((stage, round), out var entries)) continue;
+            foreach (var (idx, _) in entries)
+                if (seen.Add(idx)) result.Add(idx);
+        }
+        return result;
+    }
+
+    /// <summary>
     /// 해당 스테이지·라운드의 적 INDEX 목록 반환.
     /// Count만큼 INDEX를 펼쳐서 반환한다.
     /// ex) (MonsterINDEX=1, Count=2) → [1, 1]
@@ -275,7 +293,7 @@ public class EnemySpawnManager : MonoBehaviour
     /// enemyIndex를 키로 영어 파일명을 반환한다.
     /// Resources/Units/에 영어 파일명 PNG(Goblin.png 등)가 있으면 정상 로드.
     /// </summary>
-    private static string GetEnglishSpriteName(int enemyIndex) => enemyIndex switch
+    public static string GetEnglishSpriteName(int enemyIndex) => enemyIndex switch
     {
         1 => "Goblin",
         2 => "Orc",

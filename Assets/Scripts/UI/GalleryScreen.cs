@@ -14,18 +14,17 @@ public class GalleryScreen : MonoBehaviour
     public static GalleryScreen Instance { get; private set; }
 
     private static readonly string[] StageNames  = { "원소마법사", "흑백마법사", "비전마법사" };
-    private static readonly string[] KillerKeys  = { "Slime", "BigSlim", "Trap" };
 
-    private const int COLS = 6;
+    private const int COLS = 8;
     private const int ROWS = 2;
 
     // Row 0: 세로 초상화 (4칸)
     private const float CW0 = 387f, CH0 = 516f, CY0 = 75f;
     private static readonly float[] CX0 = { -605f, -202f, 202f, 605f };
 
-    // Row 1: 가로 스테이지/패배 이미지 (6칸)
-    private const float CW1 = 265f, CH1 = 180f, CY1 = -345f;
-    private static readonly float[] CX1 = { -698f, -419f, -140f, 140f, 419f, 698f };
+    // Row 1: 가로 스테이지/패배 이미지 (3 고정 + 5 패배, 총 8칸)
+    private const float CW1 = 180f, CH1 = 160f, CY1 = -345f;
+    private static readonly float[] CX1 = { -672f, -480f, -288f, -96f, 96f, 288f, 480f, 672f };
 
     // ── UI 참조 ───────────────────────────────────────────────────────────
     private GameObject stageSelectPanel;
@@ -38,6 +37,10 @@ public class GalleryScreen : MonoBehaviour
     private Image[,]      cellImgs  = new Image[ROWS, COLS];
     private GameObject[,] lockIcons = new GameObject[ROWS, COLS];
     private Text          detailTitle;
+
+    // 패배 이미지 슬롯 (최대 5개, 스테이지별 활성/비활성)
+    private readonly GameObject[] defeatCellGOs  = new GameObject[5];
+    private readonly Text[]       defeatHdrTexts = new Text[5];
 
     private int currentStage = 0;
 
@@ -230,15 +233,30 @@ public class GalleryScreen : MonoBehaviour
             "── 스테이지 이미지 · 패배 이미지 ──", 17,
             new Color(0.65f, 0.88f, 0.65f), TextAnchor.MiddleCenter);
 
-        string[] row1Labels = { "스테이지 입장", "배경", "클리어", "슬라임 패배", "빅슬라임 패배", "기타 패배" };
-        for (int c = 0; c < 6; c++)
+        // 고정 3칸: 스테이지 입장, 배경, 클리어
+        string[] row1FixedLabels = { "스테이지 입장", "배경", "클리어" };
+        for (int c = 0; c < 3; c++)
         {
             MakeText(detailPanel.transform, $"Row1Hdr{c}",
                 new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
-                new Vector2(CX1[c], CY1 + CH1 * 0.5f + 26f), new Vector2(240f, 26f),
-                row1Labels[c], 15, new Color(0.7f, 0.85f, 0.7f), TextAnchor.MiddleCenter);
-
+                new Vector2(CX1[c], CY1 + CH1 * 0.5f + 26f), new Vector2(220f, 26f),
+                row1FixedLabels[c], 15, new Color(0.7f, 0.85f, 0.7f), TextAnchor.MiddleCenter);
             BuildCell(detailPanel.transform, 1, c, CX1[c], CY1, CW1, CH1);
+        }
+
+        // 패배 5칸 (스테이지별 동적): 초기 위치는 임시, RefreshDetail()에서 재조정
+        for (int k = 0; k < 5; k++)
+        {
+            var hdr = MakeText(detailPanel.transform, $"Row1DefeatHdr{k}",
+                new Vector2(0.5f,0.5f), new Vector2(0.5f,0.5f),
+                new Vector2(CX1[3 + k], CY1 + CH1 * 0.5f + 26f), new Vector2(220f, 26f),
+                "", 15, new Color(1f, 0.75f, 0.55f), TextAnchor.MiddleCenter);
+            defeatHdrTexts[k] = hdr;
+
+            var cellGO = BuildCell(detailPanel.transform, 1, 3 + k, CX1[3 + k], CY1, CW1, CH1);
+            defeatCellGOs[k] = cellGO;
+            cellGO.SetActive(false);       // RefreshDetail()에서 활성화
+            hdr.gameObject.SetActive(false);
         }
 
         // 뒤로 버튼
@@ -258,8 +276,8 @@ public class GalleryScreen : MonoBehaviour
             "", 22, new Color(1f, 0.85f, 0.4f), TextAnchor.MiddleCenter);
     }
 
-    private void BuildCell(Transform parent, int row, int col,
-                           float xPos, float yPos, float w, float h)
+    private GameObject BuildCell(Transform parent, int row, int col,
+                                  float xPos, float yPos, float w, float h)
     {
         var cell = new GameObject($"Cell_{row}_{col}");
         cell.transform.SetParent(parent, false);
@@ -293,6 +311,8 @@ public class GalleryScreen : MonoBehaviour
         var btn = cell.AddComponent<Button>();
         btn.transition = Selectable.Transition.None;
         btn.onClick.AddListener(() => OnCellClick(r, c));
+
+        return cell;
     }
 
     // ── 전체화면 감상 패널 ────────────────────────────────────────────────
@@ -375,9 +395,13 @@ public class GalleryScreen : MonoBehaviour
         // Row 0: 초상화 HP3·2·1·0 (4개)
         for (int c = 0; c < 4; c++)
             fullViewOrder.Add((0, c));
-        // Row 1: 스테이지·배경·클리어·패배 (6개)
-        for (int c = 0; c < COLS; c++)
+        // Row 1 고정 3칸: 스테이지 입장·배경·클리어
+        for (int c = 0; c < 3; c++)
             fullViewOrder.Add((1, c));
+        // Row 1 패배 칸: 활성화된 것만 포함
+        for (int k = 0; k < 5; k++)
+            if (defeatCellGOs[k] != null && defeatCellGOs[k].activeSelf)
+                fullViewOrder.Add((1, 3 + k));
     }
 
     // ── 인덱스 지정 풀뷰 표시 ────────────────────────────────────────────
@@ -458,8 +482,7 @@ public class GalleryScreen : MonoBehaviour
         detailTitle.text = $"STAGE {stage}  ·  {StageNames[stage - 1]}";
         stageSelectPanel.SetActive(false);
         detailPanel.SetActive(true);
-        BuildFullViewOrder();
-        RefreshDetail();
+        RefreshDetail(); // BuildFullViewOrder()는 RefreshDetail() 마지막에 호출됨
     }
 
     /// <summary>외부 (CheatPanel 등)에서 호출 — 이미지 표시 상태 즉시 갱신</summary>
@@ -504,14 +527,94 @@ public class GalleryScreen : MonoBehaviour
             SetCell(1, 2, unlocked,
                 unlocked ? LoadSprite($"Stage/StageClear_{s}") : null);
         }
-        // ── Row 1 col 3·4·5: 패배 이미지 ─────────────────────────────────
-        for (int k = 0; k < KillerKeys.Length; k++)
+        // ── Row 1 col 3~7: 패배 이미지 (스테이지별 활성/비활성) ─────────
+        // 위치는 BuildDetailPanel()에서 CX1[3~7]로 고정 — 여기서 재배치하지 않음
+        var killerKeys  = GetStageKillerKeys(s);
+        int activeCount = Mathf.Min(killerKeys.Count, 5);
+
+        for (int k = 0; k < 5; k++)
         {
-            bool unlocked = ProgressManager.IsDefeatUnlocked(s, KillerKeys[k]);
+            if (defeatCellGOs[k] == null) continue;
+
+            bool active = k < activeCount;
+            defeatCellGOs[k].SetActive(active);
+            if (defeatHdrTexts[k] != null) defeatHdrTexts[k].gameObject.SetActive(active);
+            if (!active) continue;
+
+            defeatHdrTexts[k].text = killerKeys[k].displayLabel;
+
+            bool unlocked = ProgressManager.IsDefeatUnlocked(s, killerKeys[k].key);
             SetCell(1, 3 + k, unlocked,
-                unlocked ? LoadSprite($"Defeat/GameOver_Stage{s}_{KillerKeys[k]}") : null);
+                unlocked ? LoadSprite($"Defeat/GameOver_Stage{s}_{killerKeys[k].key}") : null);
         }
+
+        // 패배 슬롯 활성 여부가 결정된 뒤 풀뷰 순서 재구성
+        BuildFullViewOrder();
     }
+
+    // ── 스테이지별 패배 이미지 키 목록 ───────────────────────────────────────
+
+    private struct KillerKeyEntry
+    {
+        public string key;          // 영문 식별 키 (LastKillerName · 이미지 파일명 공용)
+        public string displayLabel; // 갤러리 헤더 한국어 표시 이름
+    }
+
+    private List<KillerKeyEntry> GetStageKillerKeys(int stage)
+    {
+        // EnemySpawnManager 가 있으면 CSV 기반 동적 조회
+        if (EnemySpawnManager.Instance != null)
+        {
+            var list    = new List<KillerKeyEntry>();
+            var indices = EnemySpawnManager.Instance.GetUniqueEnemyIndices(stage);
+            foreach (int idx in indices)
+            {
+                string k = EnemyDataTable.Contains(idx)
+                    ? EnemyDataTable.Get(idx).Name.Replace(" ", "")
+                    : $"Monster{idx}";
+                list.Add(new KillerKeyEntry { key = k, displayLabel = KoreanLabel(k) + " 패배" });
+            }
+            list.Add(new KillerKeyEntry { key = "Trap", displayLabel = "함정 패배" });
+            return list;
+        }
+
+        // EnemySpawnManager 가 없을 때 하드코딩 폴백
+        return GetFallbackKillerKeys(stage);
+    }
+
+    /// <summary>
+    /// EnemySpawnManager 가 씬에 없을 때 사용하는 정적 폴백.
+    /// 기획서 v1.4 기준 스테이지별 몬스터 목록을 하드코딩.
+    /// </summary>
+    private static List<KillerKeyEntry> GetFallbackKillerKeys(int stage)
+    {
+        string[] keys = stage switch
+        {
+            1 => new[] { "Orc", "Goblin", "Centaur" },
+            2 => new[] { "Slime", "Eyeball", "ShadowHand", "DarkGiant" },
+            3 => new string[0], // TODO: 3스테이지 몬스터 미정
+            _ => new string[0]
+        };
+
+        var list = new List<KillerKeyEntry>();
+        foreach (var k in keys)
+            list.Add(new KillerKeyEntry { key = k, displayLabel = KoreanLabel(k) + " 패배" });
+        list.Add(new KillerKeyEntry { key = "Trap", displayLabel = "함정 패배" });
+        return list;
+    }
+
+    /// <summary>영문 식별 키 → 갤러리 표시용 한국어 이름</summary>
+    private static string KoreanLabel(string key) => key switch
+    {
+        "Orc"        => "오크",
+        "Goblin"     => "고블린",
+        "Centaur"    => "켄타우로스",
+        "Slime"      => "슬라임",
+        "Eyeball"    => "아이볼",
+        "ShadowHand" => "그림자 손",
+        "DarkGiant"  => "암흑 거인",
+        _            => key   // 미등록 키는 영문 그대로
+    };
 
     private void SetCell(int row, int col, bool unlocked, Sprite sprite)
     {

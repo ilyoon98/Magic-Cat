@@ -1,9 +1,9 @@
 ﻿INDEX,EnemyName,Health,Damage,ATTackRange,MoveSpeed,Type
-1,고블린,1,1,1,2,Nomal
-2,오크,5,2,2,1,Nomal
-3,켄타우로스,8,2,1,2,Boss
-4,슬라임,3,2,1,1,Nomal
-5,소형슬라임,1,1,1,1,Nomal
-6,암흑거인,10,3,2,1,Boss
-7,아이볼,2,1,3,1,Nomal
-8,그림자손,1,1,1,2,Nomal
+1,Goblin,1,1,1,2,Nomal
+2,Orc,5,2,2,1,Nomal
+3,Centaur,8,2,1,2,Boss
+4,Slime,3,2,1,1,Nomal
+5,SmallSlime,1,1,1,1,Nomal
+6,DarkGiant,10,3,2,1,Boss
+7,Eyeball,2,1,3,1,Nomal
+8,ShadowHand,1,1,1,2,Nomal

@@ -100,7 +100,10 @@ public class EnemyUnit : Unit
             EffectManager.Instance?.PlayExplosion(targetPos);
 
             if (IsInAttackRange(player))
+            {
+                GameManager.LastKillerName = gameObject.name.Replace(" ", ""); // 강화 공격은 Attack() 우회
                 player.TakeDamage(attackDamage * 2);
+            }
             return;
         }
 

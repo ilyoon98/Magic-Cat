@@ -161,6 +161,8 @@ public class CentaurusUnit : EnemyUnit
         {
             if (finalHitPlayer && capturedPlayer != null && capturedPlayer.IsAlive)
             {
+                // 돌진은 Attack()을 우회하므로 여기서 직접 킬러 이름 기록
+                GameManager.LastKillerName = gameObject.name.Replace(" ", "");
                 capturedPlayer.TakeDamage(attackDamage);
                 EffectManager.Instance?.PlayExplosion(capturedPlayer.transform.position);
                 GameUI.Instance?.ShowNotify($"💥 {name} 돌진 충돌! -{attackDamage}", 1.2f);

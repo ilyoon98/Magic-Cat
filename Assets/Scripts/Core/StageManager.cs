@@ -36,6 +36,7 @@ public class StageManager : MonoBehaviour
     public void SpawnCurrentMap(bool keepPlayerPosition = false)
     {
         FloorObjectManager.Instance?.ClearAll();
+        WallManager.Instance?.ClearAll();
         EnemyManager.Instance.Reset();
 
         var enemyTypes = EnemySpawnManager.Instance != null
@@ -45,6 +46,14 @@ public class StageManager : MonoBehaviour
 
         var player   = TurnManager.Instance.GetPlayer();
         var occupied = new HashSet<Vector2Int>();
+
+        // 벽 배치 — 플레이어/적 위치 선택 전에 occupied에 등록하여 겹침 방지
+        var wallPositions = GetWallPositions(CurrentStage, CurrentMap);
+        foreach (var wp in wallPositions)
+        {
+            occupied.Add(wp);
+            WallManager.Instance?.PlaceWall(wp);
+        }
 
         const int boardSize = 8;
         const int enemyMinDist = 4; // 적은 플레이어와 최소 4칸 거리
@@ -342,6 +351,16 @@ public class StageManager : MonoBehaviour
         (3, 2) => new List<int> { 4, 4, 4, 4, 4 },
         (3, 3) => new List<int> { 5, 4, 4 },          // 보스
         _      => new List<int> { 4 }
+    };
+
+    // ── 스테이지/맵별 벽 위치 정의 ──────────────────────────────────────────
+    /// <summary>Stage 2 맵에 고정 배치되는 벽 타일 좌표 목록</summary>
+    private static List<Vector2Int> GetWallPositions(int stage, int map) => (stage, map) switch
+    {
+        (2, 1) => new List<Vector2Int> { new Vector2Int(2, 3), new Vector2Int(5, 4) },
+        (2, 2) => new List<Vector2Int> { new Vector2Int(2, 2), new Vector2Int(5, 5), new Vector2Int(3, 5) },
+        (2, 3) => new List<Vector2Int> { new Vector2Int(2, 2), new Vector2Int(2, 5), new Vector2Int(5, 2), new Vector2Int(5, 5) },
+        _      => new List<Vector2Int>()
     };
 
     // ── 스테이지/맵별 바닥 오브젝트 종류 정의 (위치는 SpawnCurrentMap에서 랜덤 배정) ──
