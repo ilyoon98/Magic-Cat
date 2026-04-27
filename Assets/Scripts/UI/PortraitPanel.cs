@@ -369,7 +369,7 @@ public class PortraitPanel : MonoBehaviour
         string[] keys = { "Q", "E" };
         for (int i = 0; i < 2; i++)
         {
-            string path = $"SkillIcons/Stage{stage}{keys[i]}";
+            string path = $"SkillIcons/Stage{stage}_{keys[i]}";
             Sprite sp = Resources.Load<Sprite>(path);
             if (sp == null)
             {
