@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
@@ -110,13 +111,33 @@ public class WallManager : MonoBehaviour
         BoardManager.Instance.GetTile(stopPos)?.SetWall(true);
         walls[stopPos] = visual;
 
-        // 시각적 위치 업데이트 (즉시 이동)
+        // 슬라이드 애니메이션
         if (visual != null)
         {
             Vector3 dest = BoardManager.Instance.GridToWorld(stopPos);
             dest.z = -0.3f;
-            visual.transform.position = dest;
+            StartCoroutine(SlideWall(visual, dest));
         }
+    }
+
+    private IEnumerator SlideWall(GameObject visual, Vector3 dest)
+    {
+        if (visual == null) yield break;
+
+        Vector3 start    = visual.transform.position;
+        float   duration = 0.25f;
+        float   elapsed  = 0f;
+
+        while (elapsed < duration)
+        {
+            if (visual == null) yield break;
+            elapsed += Time.deltaTime;
+            visual.transform.position = Vector3.Lerp(start, dest, elapsed / duration);
+            yield return null;
+        }
+
+        if (visual != null)
+            visual.transform.position = dest;
     }
 
     // ── 시각 오브젝트 생성 ────────────────────────────────────────────────────

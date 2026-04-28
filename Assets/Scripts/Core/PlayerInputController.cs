@@ -172,7 +172,27 @@ public class PlayerInputController : MonoBehaviour
         bool isMoveTile = moveTiles.Contains(hover);
         bool canShowAtk = player.CanAttack && !isMoveTile;
 
-        if (canShowAtk)
+        // 백마법 모드: 마우스 위치 단일 타일 하이라이트
+        bool isWhiteMode = player is BlackWhitePlayerUnit bwHov
+            && bwHov.CurrentMode == BlackWhitePlayerUnit.Mode.White;
+
+        if (canShowAtk && isWhiteMode)
+        {
+            // 마우스 위치가 바뀌었을 때만 미리보기 갱신
+            if (hover != lastAttackPreviewDir + player.GridPos) // dir 재사용 방지용 더미 비교
+            {
+                ClearAttackPreview();
+                var hoverTile = BoardManager.Instance.GetTile(hover);
+                if (hoverTile != null && !hoverTile.IsWall)
+                {
+                    bool isEnemy = hoverTile.IsOccupied && hoverTile.OccupiedUnit is EnemyUnit;
+                    hoverTile.SetHighlight(isEnemy ? Tile.HighlightType.Attack : Tile.HighlightType.Skill);
+                    attackPreviewTiles.Add(hover);
+                }
+                lastAttackPreviewDir = hover - player.GridPos; // 현재 hover 기록
+            }
+        }
+        else if (canShowAtk && !isWhiteMode)
         {
             Vector2Int delta = hover - player.GridPos;
             Vector2Int dir   = delta != Vector2Int.zero ? GridUtil.SnapToCardinal(delta) : Vector2Int.zero;
@@ -262,6 +282,18 @@ public class PlayerInputController : MonoBehaviour
 
         // 평타 행동이 남아있지 않으면 무시
         if (!player.CanAttack) return;
+
+        // 백마법 모드: 클릭 위치를 즉시 지점 타격 (1번 클릭으로 즉시 발사)
+        if (player is BlackWhitePlayerUnit bwWhite
+            && bwWhite.CurrentMode == BlackWhitePlayerUnit.Mode.White)
+        {
+            ClearAttackPreview();
+            if (player.TryAttackToward(targetPos))
+                turnManager.OnPlayerActed();
+            else
+                GameUI.Instance?.ShowNotify("공격 불가", 0.6f);
+            return;
+        }
 
         // 클릭 위치 기준으로 방향 산출 → 평타 미리보기 진입
         Vector2Int delta = targetPos - player.GridPos;
@@ -394,8 +426,14 @@ public class PlayerInputController : MonoBehaviour
         pendingAttackDir = Vector2Int.zero;
         lastAttackPreviewDir = Vector2Int.zero;
 
-        // 플레이어 위치 기준으로 해당 방향 한 칸 좌표를 targetPos로 전달
-        Vector2Int targetPos = player.GridPos + dir;
+        // 백마법 모드: 클릭한 실제 타일 위치를 그대로 전달 (장애물·거리 무관 지점 타격)
+        Vector2Int targetPos;
+        if (player is BlackWhitePlayerUnit bwConfirm
+            && bwConfirm.CurrentMode == BlackWhitePlayerUnit.Mode.White)
+            targetPos = GetMouseGridPos();
+        else
+            targetPos = player.GridPos + dir;
+
         if (player.TryAttackToward(targetPos))
             turnManager.OnPlayerActed();
         else
@@ -490,6 +528,8 @@ public class PlayerInputController : MonoBehaviour
             UpdateDirectionalPreview();
         else if (skill.PreviewType == SkillBase.SkillPreviewType.Teleport)
             UpdateTeleportPreview();
+        else if (skill.PreviewType == SkillBase.SkillPreviewType.Point)
+            UpdatePointPreview();
     }
 
     private void UpdateDirectionalPreview()
@@ -504,13 +544,30 @@ public class PlayerInputController : MonoBehaviour
 
         ClearSkillPreview();
 
-        Vector2Int pos = player.GridPos + dir;
+        // 흑마법 강화 모드: 3줄 평행 미리보기
+        if (player is BlackWhitePlayerUnit bwUnit && bwUnit.BlackEmpowered
+            && pendingSkillIndex == 1) // Q = 흑마법
+        {
+            Vector2Int perpA = new Vector2Int(-dir.y,  dir.x);
+            Vector2Int perpB = new Vector2Int( dir.y, -dir.x);
+            ShowSkillLine(player.GridPos,        dir);
+            ShowSkillLine(player.GridPos + perpA, dir);
+            ShowSkillLine(player.GridPos + perpB, dir);
+        }
+        else
+        {
+            ShowSkillLine(player.GridPos, dir);
+        }
+    }
+
+    /// <summary>지정 시작점에서 dir 방향으로 스킬 미리보기 타일을 추가한다.</summary>
+    private void ShowSkillLine(Vector2Int start, Vector2Int dir)
+    {
+        Vector2Int pos = start + dir;
         while (BoardManager.Instance.IsInBounds(pos))
         {
             var tile = BoardManager.Instance.GetTile(pos);
             if (tile == null) break;
-
-            // 벽 타일 — 그 너머 하이라이트 없음
             if (tile.IsWall) break;
 
             if (tile.IsOccupied)
@@ -527,6 +584,35 @@ public class PlayerInputController : MonoBehaviour
             previewTiles.Add(pos);
             pos += dir;
         }
+    }
+
+    /// <summary>Point 타입 스킬 미리보기 — 마우스 위치의 십자(+) 타일을 강조.</summary>
+    private void UpdatePointPreview()
+    {
+        Vector2Int target = GetMouseGridPos();
+        if (target == lastPreviewTarget) return;
+
+        ClearSkillPreview();
+        lastPreviewTarget = target;
+
+        // 중심
+        HighlightPointTile(target);
+
+        // 4방향 인접 (강화 시 2칸 확장 미리보기)
+        bool empowered = player is BlackWhitePlayerUnit bwP && bwP.WhiteEmpowered;
+        int  armLen    = empowered ? 2 : 1;
+
+        foreach (var dir in new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right })
+            for (int step = 1; step <= armLen; step++)
+                HighlightPointTile(target + dir * step);
+    }
+
+    private void HighlightPointTile(Vector2Int pos)
+    {
+        var tile = BoardManager.Instance.GetTile(pos);
+        if (tile == null || tile.IsWall) return;
+        tile.SetHighlight(Tile.HighlightType.Skill);
+        previewTiles.Add(pos);
     }
 
     private void UpdateTeleportPreview()

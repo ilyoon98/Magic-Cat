@@ -1,0 +1,4 @@
+﻿INDEX,EnemyName,Health,Damage,ATTackRange,MoveSpeed,Type
+1,사자,3,1,-1,1,Character
+2,토끼,2,1,-1,2,Nomal
+3,양,8,2,-1,2,Boss

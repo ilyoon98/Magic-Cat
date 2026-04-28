@@ -34,25 +34,25 @@ public class Skill_BlackMagic : SkillBase
 
         if (empowered)
         {
-            // 강화: 직선 + 좌우 1칸 (십자 Y형)
+            // 강화: 직선 + 좌우 1칸 (3줄 관통)
             FirePenetratingLine(caster, dir, damage: caster.attackDamage * 2);
-            // 좌우 보조 방향
             Vector2Int perpA = new Vector2Int(-dir.y, dir.x);
             Vector2Int perpB = new Vector2Int(dir.y, -dir.x);
             FirePenetratingLine(caster, dir, perpOffset: perpA, damage: caster.attackDamage * 2);
             FirePenetratingLine(caster, dir, perpOffset: perpB, damage: caster.attackDamage * 2);
 
             GameUI.Instance?.ShowNotify("⬛ 흑마법 강화 — 광폭 관통!", 1.5f);
-            bw.OnEmpoweredSkillUsed();
+            bw.OnEmpoweredSkillUsed(BlackWhitePlayerUnit.Mode.Black);
         }
         else
         {
             // 일반: 직선 관통
             FirePenetratingLine(caster, dir, damage: caster.attackDamage);
             GameUI.Instance?.ShowNotify("⬛ 흑마법 — 직선 관통!", 1.0f);
+            bw.MarkSkillUsed(BlackWhitePlayerUnit.Mode.Black);
         }
 
-        // 4. 게이지 충전 (강화가 아닐 때만 — 강화 사용 시 OnEmpoweredSkillUsed에서 리셋)
+        // 4. 게이지 충전 (강화가 아닐 때만)
         if (!empowered)
             bw.AddGauge(BlackWhitePlayerUnit.Mode.Black, 50f);
 

@@ -28,8 +28,11 @@ public class PortraitPanel : MonoBehaviour
 
     // ── 흑/백 게이지 UI (2스테이지 전용) ────────────────────────────────
     private GameObject gaugeRoot;
-    private UnityEngine.UI.Image blackGaugeFill;
-    private UnityEngine.UI.Image whiteGaugeFill;
+    private Image whiteFill;          // 백마법 채움 (왼쪽 ← 중앙)
+    private Image blackFill;          // 흑마법 채움 (오른쪽 → 중앙)
+    private Image whiteEndGlow;       // 바 왼쪽 끝 강화 이펙트 (백 Gauge>=100)
+    private Image blackEndGlow;       // 바 오른쪽 끝 강화 이펙트 (흑 Gauge<=0)
+    private Image[] empoweredGlow = new Image[2]; // [0]=Q흑, [1]=E백 스킬 아이콘 글로우
 
     // ── HP 기반 초상화 ────────────────────────────────────────────────────
     private Sprite[] currentHpSprites = new Sprite[4];
@@ -218,6 +221,21 @@ public class PortraitPanel : MonoBehaviour
         iconImg.color = Color.white;
         skillIconImgs[idx] = iconImg;
 
+        // ⑤ 강화 글로우 오버레이 (초기 비표시)
+        var glowGo = new GameObject("EmpoweredGlow");
+        glowGo.transform.SetParent(iconRoot.transform, false);
+        var grt2 = glowGo.AddComponent<RectTransform>();
+        grt2.anchorMin = Vector2.zero; grt2.anchorMax = Vector2.one;
+        grt2.sizeDelta = new Vector2(12f, 12f); // 아이콘보다 살짝 크게
+        grt2.anchoredPosition = Vector2.zero;
+        var glowImg = glowGo.AddComponent<Image>();
+        glowImg.sprite = circleSprite;
+        glowImg.color  = new Color(1f, 0.92f, 0.30f, 0f); // 금빛, 초기 투명
+        glowImg.type   = Image.Type.Filled;
+        glowImg.fillMethod = Image.FillMethod.Radial360;
+        glowImg.fillAmount = 1f;
+        empoweredGlow[idx] = glowImg;
+
         // 스킬 이름 (하단 18%)
         var nameGo = new GameObject($"SkillName{idx}");
         nameGo.transform.SetParent(slot.transform, false);
@@ -238,75 +256,148 @@ public class PortraitPanel : MonoBehaviour
         skillCdTxts[idx] = nameTxt; // 쿨타임 정보는 이름 텍스트에 두 번째 줄로 표시
     }
 
-    // ── 흑/백 게이지 바 (SkillBar 바로 위, 2스테이지에서만 표시) ────────
+    // ── 흑/백 슬라이더 게이지 바 (2스테이지 전용) ──────────────────────
+    //
+    //  [⬜ 백 | ← whiteFill | CENTER | blackFill → | 흑 ⬛]
+    //
+    //  Gauge=50  : 양쪽 fill=0 (중앙만 보임)
+    //  Gauge<50  : blackFill  grows right from center  (50-Gauge)/50
+    //  Gauge>50  : whiteFill  grows left  from center  (Gauge-50)/50
+    //  Gauge=0   : blackFill full  → 흑 강화 준비
+    //  Gauge=100 : whiteFill full  → 백 강화 준비
     private void BuildGaugeBar(Transform canvasRoot)
     {
-        // 전체 루트 (SkillBar 위쪽)
+        // ── 루트 컨테이너 ────────────────────────────────────────────────────
         gaugeRoot = new GameObject("GaugeBar");
         gaugeRoot.transform.SetParent(canvasRoot, false);
         var grt = gaugeRoot.AddComponent<RectTransform>();
         grt.anchorMin        = new Vector2(0f, 0f);
         grt.anchorMax        = new Vector2(0f, 0f);
         grt.pivot            = new Vector2(0f, 0f);
-        grt.anchoredPosition = new Vector2(10f, 215f); // SkillBar(y=10+200=210) 위 5px
-        grt.sizeDelta        = new Vector2(470f, 28f);
-        gaugeRoot.AddComponent<Image>().color = new Color(0.05f, 0.05f, 0.10f, 0.80f);
+        grt.anchoredPosition = new Vector2(10f, 375f);
+        grt.sizeDelta        = new Vector2(470f, 32f);
+        gaugeRoot.AddComponent<Image>().color = new Color(0.05f, 0.05f, 0.10f, 0.85f);
 
-        // 흑 게이지 (왼쪽 절반)
-        blackGaugeFill = BuildGaugeSlot(gaugeRoot.transform, "BlackGauge",
+        // ── 레이블: 백(왼쪽) + 강화 글로우 ─────────────────────────────────
+        MakeGaugeLabel(gaugeRoot.transform, "LabelWhite", "⬜",
+            new Vector2(0f, 0f), new Vector2(0.10f, 1f),
+            new Color(0.70f, 0.85f, 1.00f));
+
+        // 백 강화 이펙트 — 레이블과 같은 영역에 겹쳐서 표시
+        whiteEndGlow = MakeEndGlow(gaugeRoot.transform, "WhiteEndGlow",
+            new Vector2(0f, 0f), new Vector2(0.10f, 1f),
+            new Color(0.55f, 0.88f, 1.00f, 0f));   // 초기 투명
+
+        // ── 레이블: 흑(오른쪽) + 강화 글로우 ───────────────────────────────
+        MakeGaugeLabel(gaugeRoot.transform, "LabelBlack", "⬛",
+            new Vector2(0.90f, 0f), new Vector2(1f, 1f),
+            new Color(0.65f, 0.30f, 1.00f));
+
+        // 흑 강화 이펙트
+        blackEndGlow = MakeEndGlow(gaugeRoot.transform, "BlackEndGlow",
+            new Vector2(0.90f, 0f), new Vector2(1f, 1f),
+            new Color(0.80f, 0.30f, 1.00f, 0f));   // 초기 투명
+
+        // ── 바 본체 영역 (10% ~ 90%) ────────────────────────────────────────
+        var barArea = new GameObject("BarArea");
+        barArea.transform.SetParent(gaugeRoot.transform, false);
+        var art = barArea.AddComponent<RectTransform>();
+        art.anchorMin = new Vector2(0.10f, 0f); art.anchorMax = new Vector2(0.90f, 1f);
+        art.offsetMin = new Vector2(0f, 3f);    art.offsetMax = new Vector2(0f, -3f);
+
+        // ── 왼쪽 절반 배경 (백마법 영역) ────────────────────────────────────
+        var whiteBg = MakeBarHalf(barArea.transform, "WhiteBG",
             new Vector2(0f, 0f), new Vector2(0.5f, 1f),
-            new Color(0.35f, 0.10f, 0.55f),   // 어두운 보라
-            new Color(0.60f, 0.20f, 0.90f),   // 채워진 보라
-            "⬛ 흑");
+            new Color(0.12f, 0.18f, 0.35f)); // 어두운 파랑
 
-        // 백 게이지 (오른쪽 절반)
-        whiteGaugeFill = BuildGaugeSlot(gaugeRoot.transform, "WhiteGauge",
+        // 백 채움: 중앙에서 왼쪽으로 채움 (Origin=Right)
+        whiteFill = MakeBarFill(whiteBg.transform, "WhiteFill",
+            new Color(0.40f, 0.70f, 1.00f),          // 밝은 파랑
+            Image.OriginHorizontal.Right);
+
+        // ── 오른쪽 절반 배경 (흑마법 영역) ──────────────────────────────────
+        var blackBg = MakeBarHalf(barArea.transform, "BlackBG",
             new Vector2(0.5f, 0f), new Vector2(1f, 1f),
-            new Color(0.30f, 0.30f, 0.40f),   // 어두운 회색
-            new Color(0.85f, 0.85f, 1.00f),   // 채워진 흰빛
-            "⬜ 백");
+            new Color(0.15f, 0.05f, 0.25f)); // 어두운 보라
 
-        gaugeRoot.SetActive(false); // 2스테이지 진입 시 SetStage에서 활성화
+        // 흑 채움: 중앙에서 오른쪽으로 채움 (Origin=Left)
+        blackFill = MakeBarFill(blackBg.transform, "BlackFill",
+            new Color(0.60f, 0.15f, 0.90f),          // 밝은 보라
+            Image.OriginHorizontal.Left);
+
+        // ── 중앙 마커 ────────────────────────────────────────────────────────
+        var marker = new GameObject("CenterMark");
+        marker.transform.SetParent(barArea.transform, false);
+        var mrt = marker.AddComponent<RectTransform>();
+        mrt.anchorMin = new Vector2(0.5f, 0f); mrt.anchorMax = new Vector2(0.5f, 1f);
+        mrt.offsetMin = new Vector2(-1.5f, 0f); mrt.offsetMax = new Vector2(1.5f, 0f);
+        marker.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.60f);
+
+        // ── 초기 fill 0 (Gauge=50, 중앙) ────────────────────────────────────
+        whiteFill.fillAmount = 0f;
+        blackFill.fillAmount = 0f;
+
+        gaugeRoot.SetActive(false); // SetStage(2) 시 활성화
     }
 
-    private Image BuildGaugeSlot(Transform parent, string name,
-                                  Vector2 anchorMin, Vector2 anchorMax,
-                                  Color bgColor, Color fillColor, string label)
+    private Image MakeBarHalf(Transform parent, string name,
+                               Vector2 anchorMin, Vector2 anchorMax, Color bgColor)
     {
-        // 배경
-        var bg = new GameObject($"{name}BG");
-        bg.transform.SetParent(parent, false);
-        var bgRt = bg.AddComponent<RectTransform>();
-        bgRt.anchorMin = anchorMin; bgRt.anchorMax = anchorMax;
-        bgRt.offsetMin = new Vector2(2f, 2f); bgRt.offsetMax = new Vector2(-2f, -2f);
-        bg.AddComponent<Image>().color = bgColor;
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        var img = go.AddComponent<Image>();
+        img.color = bgColor;
+        return img;
+    }
 
-        // 채움 바 (Filled)
-        var fill = new GameObject($"{name}Fill");
-        fill.transform.SetParent(bg.transform, false);
-        var frt = fill.AddComponent<RectTransform>();
-        frt.anchorMin = Vector2.zero; frt.anchorMax = new Vector2(0.5f, 1f); // 50% 초기값
-        frt.offsetMin = frt.offsetMax = Vector2.zero;
-        var fillImg = fill.AddComponent<Image>();
-        fillImg.color = fillColor;
-        fillImg.type  = Image.Type.Filled;
-        fillImg.fillMethod = Image.FillMethod.Horizontal;
-        fillImg.fillAmount = 0.5f;
+    private Image MakeBarFill(Transform parent, string name,
+                               Color fillColor, Image.OriginHorizontal origin)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        var img = go.AddComponent<Image>();
+        img.color      = fillColor;
+        img.type       = Image.Type.Filled;
+        img.fillMethod = Image.FillMethod.Horizontal;
+        img.fillOrigin = (int)origin;
+        img.fillAmount = 0f;
+        return img;
+    }
 
-        // 레이블
-        var lbl = new GameObject($"{name}Label");
-        lbl.transform.SetParent(bg.transform, false);
-        var lrt = lbl.AddComponent<RectTransform>();
-        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
-        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
-        var txt = lbl.AddComponent<Text>();
-        txt.text      = label;
-        txt.fontSize  = 13;
-        txt.color     = Color.white;
+    private void MakeGaugeLabel(Transform parent, string name, string text,
+                                 Vector2 anchorMin, Vector2 anchorMax, Color color)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        var txt = go.AddComponent<Text>();
+        txt.text      = text;
+        txt.fontSize  = 15;
+        txt.color     = color;
         txt.alignment = TextAnchor.MiddleCenter;
         txt.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+    }
 
-        return fillImg;
+    /// <summary>바 끝 강화 이펙트용 반투명 Image (레이블 위에 겹쳐 표시)</summary>
+    private Image MakeEndGlow(Transform parent, string name,
+                               Vector2 anchorMin, Vector2 anchorMax, Color initColor)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        var img = go.AddComponent<Image>();
+        img.color = initColor;
+        return img;
     }
 
     // ── 우측 대형 초상화 ──────────────────────────────────────────────────
@@ -487,11 +578,43 @@ public class PortraitPanel : MonoBehaviour
         RefreshSkillIcon(0, player.GetSkill(1), "Q");
         RefreshSkillIcon(1, player.GetSkill(2), "E");
 
-        // 흑/백 게이지 갱신 (2스테이지 BlackWhitePlayerUnit)
+        // 흑/백 슬라이더 게이지 + 강화 이펙트 (2스테이지 전용)
         if (player is BlackWhitePlayerUnit bwGauge)
         {
-            if (blackGaugeFill != null) blackGaugeFill.fillAmount = bwGauge.BlackGauge / 100f;
-            if (whiteGaugeFill != null) whiteGaugeFill.fillAmount = bwGauge.WhiteGauge / 100f;
+            float g = bwGauge.Gauge; // 0~100, 초기 50
+
+            // 백 채움: Gauge > 50 → (Gauge-50)/50 (중앙→왼쪽)
+            if (whiteFill != null)
+                whiteFill.fillAmount = g > 50f ? (g - 50f) / 50f : 0f;
+
+            // 흑 채움: Gauge < 50 → (50-Gauge)/50 (중앙→오른쪽)
+            if (blackFill != null)
+                blackFill.fillAmount = g < 50f ? (50f - g) / 50f : 0f;
+
+            // ── 바 끝 강화 이펙트 ─────────────────────────────────────────────
+            // 흑 강화(Gauge<=0) → 오른쪽 끝 보라 빛남
+            if (blackEndGlow != null)
+                blackEndGlow.color = bwGauge.BlackEmpowered
+                    ? new Color(0.80f, 0.30f, 1.00f, 0.80f)
+                    : Color.clear;
+
+            // 백 강화(Gauge>=100) → 왼쪽 끝 하늘 빛남
+            if (whiteEndGlow != null)
+                whiteEndGlow.color = bwGauge.WhiteEmpowered
+                    ? new Color(0.55f, 0.88f, 1.00f, 0.80f)
+                    : Color.clear;
+
+            // ── 스킬 아이콘 강화 글로우 ──────────────────────────────────────
+            // [0]=Q=흑마법, [1]=E=백마법
+            if (empoweredGlow[0] != null)
+                empoweredGlow[0].color = bwGauge.BlackEmpowered
+                    ? new Color(0.80f, 0.30f, 1.00f, 0.70f)
+                    : Color.clear;
+
+            if (empoweredGlow[1] != null)
+                empoweredGlow[1].color = bwGauge.WhiteEmpowered
+                    ? new Color(0.55f, 0.88f, 1.00f, 0.70f)
+                    : Color.clear;
         }
     }
 
@@ -549,9 +672,19 @@ public class PortraitPanel : MonoBehaviour
         LoadPortraitsForStage(stage);
         LoadSkillIcons(stage);
 
-        // 흑/백 게이지는 2스테이지에서만 표시
+        // 흑/백 슬라이더 게이지는 2스테이지에서만 표시
         if (gaugeRoot != null)
+        {
             gaugeRoot.SetActive(stage == 2);
+            // 초기 Gauge=50 → 양쪽 fill 모두 0 (중앙 상태)
+            if (stage == 2)
+            {
+                if (whiteFill != null) whiteFill.fillAmount = 0f;
+                if (blackFill != null) blackFill.fillAmount = 0f;
+                if (empoweredGlow[0] != null) empoweredGlow[0].color = Color.clear;
+                if (empoweredGlow[1] != null) empoweredGlow[1].color = Color.clear;
+            }
+        }
     }
 
     public void SetCharacterInfo(string charName, string portrait)

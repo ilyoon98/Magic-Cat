@@ -26,11 +26,15 @@ public class BlackWhitePlayerUnit : PlayerUnit
     // ── 모드 & 게이지 ─────────────────────────────────────────────────────
     public Mode CurrentMode { get; private set; } = Mode.None;
 
-    public float BlackGauge { get; private set; } = 50f;
-    public float WhiteGauge { get; private set; } = 50f;
+    /// <summary>0 = 완전 흑 (BlackEmpowered), 100 = 완전 백 (WhiteEmpowered), 초기 50</summary>
+    public float Gauge { get; private set; } = 50f;
 
-    public bool BlackEmpowered => BlackGauge >= 100f;
-    public bool WhiteEmpowered => WhiteGauge >= 100f;
+    public bool BlackEmpowered => Gauge <= 0f;
+    public bool WhiteEmpowered => Gauge >= 100f;
+
+    // ── 이번 턴 정규 스킬 사용 여부 (강화 후 쿨타임 결정에 사용) ────────────
+    private bool usedBlackSkillThisTurn = false;
+    private bool usedWhiteSkillThisTurn = false;
 
     // ── 공격 색상 ─────────────────────────────────────────────────────────
     protected override Color AttackColor => CurrentMode switch
@@ -45,6 +49,20 @@ public class BlackWhitePlayerUnit : PlayerUnit
         base.Awake();
         skill1 = gameObject.AddComponent<Skill_BlackMagic>();
         skill2 = gameObject.AddComponent<Skill_WhiteMagic>();
+    }
+
+    public override void StartTurn()
+    {
+        base.StartTurn();
+        usedBlackSkillThisTurn = false;
+        usedWhiteSkillThisTurn = false;
+    }
+
+    /// <summary>정규(비강화) 스킬 사용 시 호출 — 강화 후 쿨타임 초기화 여부 결정용</summary>
+    public void MarkSkillUsed(Mode mode)
+    {
+        if (mode == Mode.Black) usedBlackSkillThisTurn = true;
+        else if (mode == Mode.White) usedWhiteSkillThisTurn = true;
     }
 
     // ── 평타 오버라이드 ──────────────────────────────────────────────────
@@ -143,24 +161,17 @@ public class BlackWhitePlayerUnit : PlayerUnit
             GameUI.Instance?.ShowNotify("⛓ 흑마법 처치 — 연쇄!", 1.0f);
     }
 
-    // ── 백마법 평타: 클릭한 적 단일 타격 (방향·장애물 무시) ────────────
+    // ── 백마법 평타: 지점 타격 (장애물·적 무관, 거리 무관) ────────────────
     private bool AttackWhiteMode(Vector2Int targetPos)
     {
-        // 맵 전체에서 targetPos에 있는 적 직접 탐색
         var tile = BoardManager.Instance.GetTile(targetPos);
-        EnemyUnit target = tile?.OccupiedUnit as EnemyUnit;
+        if (tile == null) return false;
 
-        // 타겟 칸에 적이 없으면 방향 직선 기준 첫 번째 적으로 폴백
-        if (target == null)
-        {
-            Vector2Int dir = GridUtil.SnapToCardinal(targetPos - GridPos);
-            target = GridUtil.FindFirstEnemyInDir(GridPos, dir);
-        }
-
-        if (target == null) return false;
+        // targetPos 위치 그대로 발사 (적이 없어도 허용)
+        EnemyUnit target = tile.OccupiedUnit as EnemyUnit;
 
         Vector3 from = BoardManager.Instance.GridToWorld(GridPos);
-        Vector3 to   = BoardManager.Instance.GridToWorld(target.GridPos);
+        Vector3 to   = BoardManager.Instance.GridToWorld(targetPos);
 
         EnemyUnit captured = target;
         BlackWhitePlayerUnit self = this;
@@ -189,33 +200,58 @@ public class BlackWhitePlayerUnit : PlayerUnit
     }
 
     // ── 게이지 관리 ──────────────────────────────────────────────────────
-    /// <summary>지정 모드 게이지 추가. 100 초과는 100으로 클램프.</summary>
+    /// <summary>
+    /// 흑 모드 → Gauge 감소 (0 방향), 백 모드 → Gauge 증가 (100 방향).
+    /// 0 이하: 흑 강화 준비, 100 이상: 백 강화 준비.
+    /// </summary>
     public void AddGauge(Mode mode, float amount)
     {
         if (mode == Mode.Black)
         {
-            BlackGauge = Mathf.Min(100f, BlackGauge + amount);
-            if (BlackGauge >= 100f)
+            Gauge = Mathf.Max(0f, Gauge - amount);
+            if (Gauge <= 0f)
                 GameUI.Instance?.ShowNotify("⬛ 흑 게이지 MAX — 강화 준비!", 1.2f);
         }
         else if (mode == Mode.White)
         {
-            WhiteGauge = Mathf.Min(100f, WhiteGauge + amount);
-            if (WhiteGauge >= 100f)
+            Gauge = Mathf.Min(100f, Gauge + amount);
+            if (Gauge >= 100f)
                 GameUI.Instance?.ShowNotify("⬜ 백 게이지 MAX — 강화 준비!", 1.2f);
         }
         GameUI.Instance?.Refresh();
     }
 
-    /// <summary>강화 스킬 사용 후 양쪽 쿨타임 초기화 + 게이지 리셋</summary>
-    public void OnEmpoweredSkillUsed()
+    /// <summary>
+    /// 강화 스킬 사용 후 게이지 리셋 + 쿨타임 조건부 초기화.
+    ///   · 이번 턴에 해당 속성 정규 스킬을 사용했으면 → 해당 스킬 쿨타임 초기화 안 함
+    ///   · 사용하지 않았으면 → 해당 스킬 쿨타임 초기화 (보너스)
+    ///   · 반대 속성 스킬 쿨타임은 항상 초기화
+    /// </summary>
+    public void OnEmpoweredSkillUsed(Mode empoweredMode)
     {
-        BlackGauge = 50f;
-        WhiteGauge = 50f;
-        skill1?.ReduceCooldown(99); // 강제 0으로
-        skill2?.ReduceCooldown(99);
+        Gauge = 50f;
+
+        bool usedRegular = empoweredMode == Mode.Black
+            ? usedBlackSkillThisTurn
+            : usedWhiteSkillThisTurn;
+
+        if (empoweredMode == Mode.Black)
+        {
+            // 반대(백) 쿨타임 항상 초기화
+            skill2?.ReduceCooldown(99);
+            // 흑 쿨타임: 정규 흑 스킬을 이미 썼으면 초기화 안 함
+            if (!usedRegular) skill1?.ReduceCooldown(99);
+        }
+        else
+        {
+            // 반대(흑) 쿨타임 항상 초기화
+            skill1?.ReduceCooldown(99);
+            // 백 쿨타임: 정규 백 스킬을 이미 썼으면 초기화 안 함
+            if (!usedRegular) skill2?.ReduceCooldown(99);
+        }
+
         GameUI.Instance?.Refresh();
-        Debug.Log("[흑백마법사] 강화 발동 — 게이지·쿨타임 리셋");
+        Debug.Log($"[흑백마법사] 강화 발동 ({empoweredMode}) — 정규 사용: {usedRegular}, 쿨 초기화: {!usedRegular}");
     }
 
 }
