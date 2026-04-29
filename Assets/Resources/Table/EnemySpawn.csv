@@ -1,15 +1,15 @@
-﻿Stage,Round,MonsterINDEX,Count
-1,1,1,2
-1,1,2,1
-1,2,1,3
-1,2,2,1
-1,3,3,1
-1,3,2,2
-2,1,4,3
-2,1,8,1
-2,2,4,2
-2,2,7,2
-2,2,8,1
-2,3,6,1
-2,3,4,2
-2,3,7,1
+﻿Stage,Round,MonsterINDEX,Count,
+1,1,1,2,Goblin 2마리
+1,1,2,1,Orc 1마리
+1,2,1,3,Goblin 3마리
+1,2,2,1,Orc 1마리
+1,3,3,1,Centaur 1마리
+1,3,2,2,Orc 2마리
+2,1,4,3,Slime 3마리
+2,1,8,1,ShadowHand 1마리
+2,2,4,3,Slime 3마리
+2,2,7,2,Eyeball 2마리
+2,2,8,1,ShadowHand 1마리
+2,3,6,1,DarkGiant 1마리
+2,3,4,4,Slime 4마리
+2,3,7,2,Eyeball 2마리
