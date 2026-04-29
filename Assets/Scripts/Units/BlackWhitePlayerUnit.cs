@@ -36,6 +36,9 @@ public class BlackWhitePlayerUnit : PlayerUnit
     private bool usedBlackSkillThisTurn = false;
     private bool usedWhiteSkillThisTurn = false;
 
+    /// <summary>투사체 비행 중 — true 동안 PlayerInputController가 행동 입력을 차단</summary>
+    public bool IsProjectilePending { get; private set; } = false;
+
     // ── 공격 색상 ─────────────────────────────────────────────────────────
     protected override Color AttackColor => CurrentMode switch
     {
@@ -81,8 +84,6 @@ public class BlackWhitePlayerUnit : PlayerUnit
 
         hasAttackedThisTurn = true;
         ActionsUsed++;
-        skill1?.ReduceCooldown(1);
-        skill2?.ReduceCooldown(1);
         GameUI.Instance?.Refresh();
         return true;
     }
@@ -99,13 +100,15 @@ public class BlackWhitePlayerUnit : PlayerUnit
             : BoardManager.Instance.GridToWorld(GridUtil.GetFarEdge(GridPos, dir));
 
         EnemyUnit captured = enemy;
+        BlackWhitePlayerUnit self = this;
+        IsProjectilePending = true;
         SkillProjectile.Fire(from, to, AttackColor, AttackSpeed, onHit: () =>
         {
-            if (captured != null && captured.IsAlive)
-            {
-                EffectManager.Instance?.PlayAttack(captured.transform.position);
-                base.Attack(captured);
-            }
+            self.IsProjectilePending = false;
+            if (captured == null || !captured.IsAlive) return;
+            EffectManager.Instance?.PlayAttack(captured.transform.position);
+            // Unit.Attack() 의 거리 체크(attackRange=1)를 우회, 직접 데미지
+            captured.TakeDamage(self.attackDamage);
         });
         return true;
     }
@@ -124,8 +127,10 @@ public class BlackWhitePlayerUnit : PlayerUnit
         EnemyUnit captured = enemy;
         BlackWhitePlayerUnit self = this;
 
+        IsProjectilePending = true;
         SkillProjectile.Fire(from, to, AttackColor, AttackSpeed, onHit: () =>
         {
+            self.IsProjectilePending = false;
             if (captured == null || !captured.IsAlive) return;
 
             EffectManager.Instance?.PlayFireHit(captured.transform.position);
@@ -176,20 +181,20 @@ public class BlackWhitePlayerUnit : PlayerUnit
         EnemyUnit captured = target;
         BlackWhitePlayerUnit self = this;
 
+        IsProjectilePending = true;
         SkillProjectile.Fire(from, to, AttackColor, AttackSpeed, onHit: () =>
         {
+            self.IsProjectilePending = false;
             if (captured == null || !captured.IsAlive) return;
             EffectManager.Instance?.PlayWoodHit(captured.transform.position);
-            self.BaseAttack(captured);
+            // Unit.Attack() 의 거리 체크(attackRange=1)를 우회, 직접 데미지 (백마법은 거리 무제한)
+            captured.TakeDamage(self.attackDamage);
         });
 
         // 게이지 충전 (백 +50)
         AddGauge(Mode.White, 50f);
         return true;
     }
-
-    // base.Attack 래퍼 — C# 람다 내부에서 base.X() 직접 호출 불가하므로 래퍼 사용
-    public void BaseAttack(Unit target) => base.Attack(target);
 
     // ── 모드 전환 ────────────────────────────────────────────────────────
     public void SetMode(Mode mode)

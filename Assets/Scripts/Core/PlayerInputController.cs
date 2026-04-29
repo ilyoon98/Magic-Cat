@@ -120,6 +120,10 @@ public class PlayerInputController : MonoBehaviour
         UpdateHoverHighlight();
         RefreshMoveHighlight();
 
+        // 투사체 비행 중 — 착탄 전까지 행동 입력 차단
+        if (player is BlackWhitePlayerUnit bwFlight && bwFlight.IsProjectilePending)
+            return;
+
         if (player.HasActedThisTurn)
         {
             ClearAttackPreview();
@@ -172,25 +176,23 @@ public class PlayerInputController : MonoBehaviour
         bool isMoveTile = moveTiles.Contains(hover);
         bool canShowAtk = player.CanAttack && !isMoveTile;
 
-        // 백마법 모드: 마우스 위치 단일 타일 하이라이트
+        // 백마법 모드: 맵 전체 타일 하이라이트 (사거리 무제한)
         bool isWhiteMode = player is BlackWhitePlayerUnit bwHov
             && bwHov.CurrentMode == BlackWhitePlayerUnit.Mode.White;
 
+        // 전체 맵 하이라이트 완료 여부 추적용 센티넬
+        var whiteMapSentinel = new Vector2Int(-998, -998);
+
         if (canShowAtk && isWhiteMode)
         {
-            // 마우스 위치가 바뀌었을 때만 미리보기 갱신
-            if (hover != lastAttackPreviewDir + player.GridPos) // dir 재사용 방지용 더미 비교
+            // 아직 전체 맵 하이라이트를 안 그렸으면 한 번만 그림
+            if (lastAttackPreviewDir != whiteMapSentinel)
             {
                 ClearAttackPreview();
-                var hoverTile = BoardManager.Instance.GetTile(hover);
-                if (hoverTile != null && !hoverTile.IsWall)
-                {
-                    bool isEnemy = hoverTile.IsOccupied && hoverTile.OccupiedUnit is EnemyUnit;
-                    hoverTile.SetHighlight(isEnemy ? Tile.HighlightType.Attack : Tile.HighlightType.Skill);
-                    attackPreviewTiles.Add(hover);
-                }
-                lastAttackPreviewDir = hover - player.GridPos; // 현재 hover 기록
+                BuildWhiteModeFullMapPreview();
+                lastAttackPreviewDir = whiteMapSentinel;
             }
+            // 마우스 이하 hover 처리는 하단 lastHover 로직에서 담당
         }
         else if (canShowAtk && !isWhiteMode)
         {
@@ -283,15 +285,13 @@ public class PlayerInputController : MonoBehaviour
         // 평타 행동이 남아있지 않으면 무시
         if (!player.CanAttack) return;
 
-        // 백마법 모드: 클릭 위치를 즉시 지점 타격 (1번 클릭으로 즉시 발사)
+        // 백마법 모드: 적 클릭 → 선택 하이라이트 (재클릭으로 확정)
         if (player is BlackWhitePlayerUnit bwWhite
             && bwWhite.CurrentMode == BlackWhitePlayerUnit.Mode.White)
         {
-            ClearAttackPreview();
-            if (player.TryAttackToward(targetPos))
-                turnManager.OnPlayerActed();
-            else
-                GameUI.Instance?.ShowNotify("공격 불가", 0.6f);
+            // 적이 있는 타일만 선택 가능. 빈 칸 클릭은 무시
+            if (tile.OccupiedUnit is EnemyUnit)
+                EnterWhiteAttackPending(targetPos);
             return;
         }
 
@@ -346,9 +346,35 @@ public class PlayerInputController : MonoBehaviour
         GameUI.Instance?.ShowNotify("⚔ 같은 방향 재클릭으로 공격 / 다른 행동 or ESC 취소", 2.5f);
     }
 
+    /// <summary>백마법 모드 전용: 적 선택 → AttackPending 진입 (Selected 하이라이트)</summary>
+    private void EnterWhiteAttackPending(Vector2Int enemyPos)
+    {
+        ClearAttackPreview();
+        ClearMoveHighlight();
+        ClearHoverHighlight();
+
+        state            = InputState.AttackPending;
+        pendingAttackDir = enemyPos - player.GridPos; // 선택된 적의 상대 위치 저장
+
+        // 선택된 적 타일을 노란색(Selected)으로 표시
+        var tile = BoardManager.Instance.GetTile(enemyPos);
+        if (tile != null)
+        {
+            tile.SetHighlight(Tile.HighlightType.Selected);
+            attackPreviewTiles.Add(enemyPos);
+        }
+
+        GameUI.Instance?.ShowNotify("⬜ 같은 적 재클릭으로 공격 확정 / 다른 적 클릭으로 교체 / ESC 취소", 2.5f);
+    }
+
     // 마우스 방향이 바뀌면 미리보기도 갱신
     private void UpdateAttackPendingPreview()
     {
+        // 백마법 모드: 선택된 적 하이라이트만 유지, 방향 갱신 하지 않음
+        if (player is BlackWhitePlayerUnit bwUpd
+            && bwUpd.CurrentMode == BlackWhitePlayerUnit.Mode.White)
+            return;
+
         Vector2Int hover = GetMouseGridPos();
         Vector2Int delta = hover - player.GridPos;
         if (delta == Vector2Int.zero) return;
@@ -368,9 +394,33 @@ public class PlayerInputController : MonoBehaviour
         var kb    = Keyboard.current;
         var mouse = Mouse.current;
 
-        // ── 좌클릭 → 공격 확정 ──────────────────────────────────────────
+        // ── 좌클릭 ───────────────────────────────────────────────────────
         if (mouse != null && mouse.leftButton.wasPressedThisFrame)
         {
+            // 백마법 모드: 재클릭=확정, 다른 적=교체, 빈 칸=취소
+            if (player is BlackWhitePlayerUnit bwCancel
+                && bwCancel.CurrentMode == BlackWhitePlayerUnit.Mode.White)
+            {
+                Vector2Int clickedPos     = GetMouseGridPos();
+                Vector2Int selectedEnemy  = player.GridPos + pendingAttackDir;
+
+                if (clickedPos == selectedEnemy)
+                {
+                    // 같은 적 재클릭 → 확정
+                    ConfirmAttack();
+                }
+                else
+                {
+                    var clickedTile = BoardManager.Instance.GetTile(clickedPos);
+                    if (clickedTile != null && clickedTile.OccupiedUnit is EnemyUnit)
+                        EnterWhiteAttackPending(clickedPos); // 다른 적 → 선택 교체
+                    else
+                        CancelAttackPending();               // 빈 칸 → 취소
+                }
+                return;
+            }
+
+            // 일반 모드: 즉시 공격 확정
             ConfirmAttack();
             return;
         }
@@ -424,15 +474,10 @@ public class PlayerInputController : MonoBehaviour
         ClearAttackPreview();
         state            = InputState.Normal;
         pendingAttackDir = Vector2Int.zero;
-        lastAttackPreviewDir = Vector2Int.zero;
 
-        // 백마법 모드: 클릭한 실제 타일 위치를 그대로 전달 (장애물·거리 무관 지점 타격)
-        Vector2Int targetPos;
-        if (player is BlackWhitePlayerUnit bwConfirm
-            && bwConfirm.CurrentMode == BlackWhitePlayerUnit.Mode.White)
-            targetPos = GetMouseGridPos();
-        else
-            targetPos = player.GridPos + dir;
+        // 백마법 모드: 저장된 선택 적 위치 사용 (player.GridPos + dir = 선택한 적 GridPos)
+        // 일반 모드: 플레이어 위치 + 방향 = 공격 목표
+        Vector2Int targetPos = player.GridPos + dir;
 
         if (player.TryAttackToward(targetPos))
             turnManager.OnPlayerActed();
@@ -795,6 +840,24 @@ public class PlayerInputController : MonoBehaviour
     // 공통 유틸
     // ═══════════════════════════════════════════════════════════════════════
 
+    /// <summary>백마법 모드: 플레이어 타일 제외 맵 전체 비벽 타일 하이라이트.</summary>
+    private void BuildWhiteModeFullMapPreview()
+    {
+        int w = BoardManager.Instance.Width;
+        int h = BoardManager.Instance.Height;
+        for (int x = 0; x < w; x++)
+        for (int y = 0; y < h; y++)
+        {
+            var pos = new Vector2Int(x, y);
+            if (pos == player.GridPos) continue;
+            var tile = BoardManager.Instance.GetTile(pos);
+            if (tile == null || tile.IsWall) continue;
+            bool isEnemy = tile.IsOccupied && tile.OccupiedUnit is EnemyUnit;
+            tile.SetHighlight(isEnemy ? Tile.HighlightType.Attack : Tile.HighlightType.Skill);
+            attackPreviewTiles.Add(pos);
+        }
+    }
+
     private void BuildAttackPreview(Vector2Int dir)
     {
         int maxSteps = player.AttackReach > 0 ? player.AttackReach : int.MaxValue;
@@ -839,6 +902,8 @@ public class PlayerInputController : MonoBehaviour
                 : Tile.HighlightType.None);
         }
         attackPreviewTiles.Clear();
+        // 전체맵 sentinel도 초기화 → 다음 프레임에 백모드 미리보기 재빌드 허용
+        lastAttackPreviewDir = Vector2Int.zero;
     }
 
     private void ClearHoverHighlight()

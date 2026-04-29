@@ -32,7 +32,9 @@ public class PortraitPanel : MonoBehaviour
     private Image blackFill;          // 흑마법 채움 (오른쪽 → 중앙)
     private Image whiteEndGlow;       // 바 왼쪽 끝 강화 이펙트 (백 Gauge>=100)
     private Image blackEndGlow;       // 바 오른쪽 끝 강화 이펙트 (흑 Gauge<=0)
-    private Image[] empoweredGlow = new Image[2]; // [0]=Q흑, [1]=E백 스킬 아이콘 글로우
+    // 강화 상태 아이콘 교체용 (없으면 null, 없는 경우 링 색상으로만 표현)
+    private Sprite[] skillIconBaseSprites      = new Sprite[2]; // 평상시 아이콘
+    private Sprite[] skillIconEmpoweredSprites = new Sprite[2]; // 강화시 아이콘
 
     // ── HP 기반 초상화 ────────────────────────────────────────────────────
     private Sprite[] currentHpSprites = new Sprite[4];
@@ -209,7 +211,7 @@ public class PortraitPanel : MonoBehaviour
         cImg.sprite = circleSprite;
         cImg.color  = new Color(0.07f, 0.08f, 0.13f);
 
-        // ④ 스킬 아이콘 이미지
+        // ④ 스킬 아이콘 이미지 (강화시 스프라이트 교체로 표현)
         var iconGo = new GameObject("Icon");
         iconGo.transform.SetParent(iconRoot.transform, false);
         var irt = iconGo.AddComponent<RectTransform>();
@@ -220,21 +222,6 @@ public class PortraitPanel : MonoBehaviour
         iconImg.preserveAspect = true;
         iconImg.color = Color.white;
         skillIconImgs[idx] = iconImg;
-
-        // ⑤ 강화 글로우 오버레이 (초기 비표시)
-        var glowGo = new GameObject("EmpoweredGlow");
-        glowGo.transform.SetParent(iconRoot.transform, false);
-        var grt2 = glowGo.AddComponent<RectTransform>();
-        grt2.anchorMin = Vector2.zero; grt2.anchorMax = Vector2.one;
-        grt2.sizeDelta = new Vector2(12f, 12f); // 아이콘보다 살짝 크게
-        grt2.anchoredPosition = Vector2.zero;
-        var glowImg = glowGo.AddComponent<Image>();
-        glowImg.sprite = circleSprite;
-        glowImg.color  = new Color(1f, 0.92f, 0.30f, 0f); // 금빛, 초기 투명
-        glowImg.type   = Image.Type.Filled;
-        glowImg.fillMethod = Image.FillMethod.Radial360;
-        glowImg.fillAmount = 1f;
-        empoweredGlow[idx] = glowImg;
 
         // 스킬 이름 (하단 18%)
         var nameGo = new GameObject($"SkillName{idx}");
@@ -460,21 +447,33 @@ public class PortraitPanel : MonoBehaviour
         string[] keys = { "Q", "E" };
         for (int i = 0; i < 2; i++)
         {
+            // 기본 아이콘
             string path = $"SkillIcons/Stage{stage}_{keys[i]}";
-            Sprite sp = Resources.Load<Sprite>(path);
-            if (sp == null)
-            {
-                Texture2D tex = Resources.Load<Texture2D>(path);
-                if (tex != null)
-                    sp = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
-                        new Vector2(0.5f, 0.5f));
-            }
+            Sprite sp = LoadSprite(path);
+            skillIconBaseSprites[i] = sp;
             if (skillIconImgs[i] != null)
             {
                 skillIconImgs[i].sprite = sp;
                 skillIconImgs[i].color  = sp != null ? Color.white : new Color(0.5f, 0.55f, 0.6f);
             }
+
+            // 강화 아이콘 (없으면 null — 링 색상으로만 표현)
+            string empPath = $"SkillIcons/Stage{stage}_{keys[i]}_Empowered";
+            skillIconEmpoweredSprites[i] = LoadSprite(empPath);
         }
+    }
+
+    private static Sprite LoadSprite(string path)
+    {
+        Sprite sp = Resources.Load<Sprite>(path);
+        if (sp == null)
+        {
+            Texture2D tex = Resources.Load<Texture2D>(path);
+            if (tex != null)
+                sp = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                    new Vector2(0.5f, 0.5f));
+        }
+        return sp;
     }
 
     private void ApplyHpPortrait(int hp)
@@ -604,17 +603,48 @@ public class PortraitPanel : MonoBehaviour
                     ? new Color(0.55f, 0.88f, 1.00f, 0.80f)
                     : Color.clear;
 
-            // ── 스킬 아이콘 강화 글로우 ──────────────────────────────────────
-            // [0]=Q=흑마법, [1]=E=백마법
-            if (empoweredGlow[0] != null)
-                empoweredGlow[0].color = bwGauge.BlackEmpowered
-                    ? new Color(0.80f, 0.30f, 1.00f, 0.70f)
-                    : Color.clear;
+            // ── 스킬 아이콘 강화 표현 (링 색상 + 아이콘 교체 + 이름 텍스트) ───
+            // [0]=Q=흑마법
+            ApplyEmpoweredSkillVisual(0, player.GetSkill(1), bwGauge.BlackEmpowered,
+                new Color(0.85f, 0.25f, 1.00f), // 강화 링 색상: 밝은 보라
+                "<color=#CC44FF>⚡ 강화!</color>");
 
-            if (empoweredGlow[1] != null)
-                empoweredGlow[1].color = bwGauge.WhiteEmpowered
-                    ? new Color(0.55f, 0.88f, 1.00f, 0.70f)
-                    : Color.clear;
+            // [1]=E=백마법
+            ApplyEmpoweredSkillVisual(1, player.GetSkill(2), bwGauge.WhiteEmpowered,
+                new Color(0.45f, 0.92f, 1.00f), // 강화 링 색상: 밝은 하늘
+                "<color=#44CCFF>⚡ 강화!</color>");
+        }
+    }
+
+    /// <summary>
+    /// 강화 상태일 때 스킬 슬롯 시각 효과를 적용한다.
+    ///   · empowered=true  → 링 색상 변경 + 아이콘 스프라이트 교체 + 이름 "강화!" 표시
+    ///   · empowered=false → 기본 아이콘으로 복원 (링/이름은 RefreshSkillIcon이 담당)
+    /// </summary>
+    private void ApplyEmpoweredSkillVisual(int idx, SkillBase skill, bool empowered,
+                                            Color empoweredRingColor, string empoweredLabel)
+    {
+        if (empowered)
+        {
+            int cd = skill?.DisplayCooldown ?? 1;
+
+            // 링: 쿨타임 없을 때만 강화 색상으로 덮어쓰기
+            if (skillFillRings[idx] != null && cd <= 0)
+                skillFillRings[idx].color = empoweredRingColor;
+
+            // 아이콘: 강화 스프라이트가 있으면 교체
+            if (skillIconImgs[idx] != null && skillIconEmpoweredSprites[idx] != null)
+                skillIconImgs[idx].sprite = skillIconEmpoweredSprites[idx];
+
+            // 이름 텍스트: 쿨타임 없을 때만 강화 레이블 표시
+            if (skillNameTxts[idx] != null && cd <= 0)
+                skillNameTxts[idx].text = $"{skill?.skillName}\n{empoweredLabel}";
+        }
+        else
+        {
+            // 강화 해제 → 기본 아이콘으로 복원 (링/이름은 이미 RefreshSkillIcon이 설정)
+            if (skillIconImgs[idx] != null && skillIconBaseSprites[idx] != null)
+                skillIconImgs[idx].sprite = skillIconBaseSprites[idx];
         }
     }
 
@@ -681,8 +711,6 @@ public class PortraitPanel : MonoBehaviour
             {
                 if (whiteFill != null) whiteFill.fillAmount = 0f;
                 if (blackFill != null) blackFill.fillAmount = 0f;
-                if (empoweredGlow[0] != null) empoweredGlow[0].color = Color.clear;
-                if (empoweredGlow[1] != null) empoweredGlow[1].color = Color.clear;
             }
         }
     }
