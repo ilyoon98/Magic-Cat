@@ -16,7 +16,7 @@ public class Skill_BlackMagic : SkillBase
     {
         skillName   = "흑마법";
         description = "흑모드 전환 + 직선 관통 공격 (강화 시 범위 확장)";
-        maxCooldown = 3;
+        maxCooldown = 2;
     }
 
     protected override bool OnUse(PlayerUnit caster, Vector2Int targetPos)

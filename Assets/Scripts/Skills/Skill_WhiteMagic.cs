@@ -27,7 +27,7 @@ public class Skill_WhiteMagic : SkillBase
     {
         skillName   = "백마법";
         description = "마우스 위치 중심 +자 5칸 신성 지역 생성 (강화 시 9칸)";
-        maxCooldown = 3;
+        maxCooldown = 2;
     }
 
     protected override bool OnUse(PlayerUnit caster, Vector2Int targetPos)
@@ -87,7 +87,11 @@ public class Skill_WhiteMagic : SkillBase
         // 기존 바닥 오브젝트가 있으면 덮어쓰지 않음 (함정 등 보존)
         if (FloorObjectManager.Instance?.GetAt(pos) != null) return;
 
-        FloorObjectManager.Instance?.Spawn(FloorObject.ObjectType.HolyGround, pos);
+        FloorObject holy = FloorObjectManager.Instance?.Spawn(FloorObject.ObjectType.HolyGround, pos);
         placed++;
+
+        // 설치 시점에 이미 적이 있으면 즉시 발동 (밟은 것과 동일)
+        if (holy != null && tile.OccupiedUnit is EnemyUnit enemy && enemy.IsAlive)
+            holy.TryActivate(enemy);
     }
 }
